@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -55,19 +55,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brandon.videodownloader.data.Status
 import com.brandon.videodownloader.ui.components.GradientIcon
 import com.brandon.videodownloader.ui.screens.AccountsScreen
 import com.brandon.videodownloader.ui.screens.DownloadScreen
 import com.brandon.videodownloader.ui.screens.LibraryScreen
+import com.brandon.videodownloader.ui.screens.LockScreen
 import com.brandon.videodownloader.ui.screens.PlayerScreen
 import com.brandon.videodownloader.ui.screens.QueueScreen
 import com.brandon.videodownloader.ui.screens.QuickDownloadContent
 import com.brandon.videodownloader.ui.screens.SettingsScreen
 import com.brandon.videodownloader.ui.theme.AppTheme
 
-class MainActivity : ComponentActivity() {
+/**
+ * FragmentActivity (y no ComponentActivity) porque el diálogo de huella del sistema
+ * (BiometricPrompt) se monta como un Fragment.
+ */
+class MainActivity : FragmentActivity() {
     private val vm: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,8 +82,28 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) handleShare(intent)
         setContent {
             val theme by vm.settings.theme.collectAsStateWithLifecycle()
-            AppTheme(theme) { Root(vm) }
+            val lockEnabled by vm.settings.appLock.collectAsStateWithLifecycle()
+            // Con bloqueo activo: FLAG_SECURE oculta la app en "Recientes" (sale en negro)
+            // e impide capturas de pantalla de su contenido.
+            LaunchedEffect(lockEnabled) {
+                if (lockEnabled) window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+                else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+            AppTheme(theme) {
+                if (lockEnabled && AppLock.locked) LockScreen(onUnlock = { AppLock.unlock(this) })
+                else Root(vm)
+            }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppLock.onForeground(this, vm.settings.appLock.value)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        AppLock.onBackground()
     }
 
     // launchMode="singleTop": si la app ya está abierta y compartes otro enlace, llega aquí.

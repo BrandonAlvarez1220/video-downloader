@@ -19,6 +19,8 @@ YouTube, TikTok, Instagram, Facebook, X/Twitter, Vimeo, Twitch, Reddit y [+1800 
   Facebook, X, TikTok, Reddit o cualquier otro sitio) para bajar contenido +18, privado o de suscriptores.
   La sesión (cookies) se guarda solo en el teléfono.
 - **Modo privado**: lo descargado se guarda en una bóveda interna de la app (🔒), no en la galería.
+- **Bloqueo con huella**: pide huella, rostro o PIN del teléfono al abrir la app (o al volver tras
+  30 s fuera). Con el bloqueo activo, la app se ve en negro en "Recientes" y no permite capturas.
 - **Ajustes**: calidad predeterminada, descargas simultáneas, solo Wi-Fi, tema claro/oscuro/sistema.
 - yt-dlp se actualiza solo una vez al día, y también desde Ajustes.
 
@@ -95,6 +97,7 @@ No hay backend: todo corre en el teléfono.
 | ViewModel + StateFlow | MVVM con `INotifyPropertyChanged` |
 | Room (`@Entity`, `@Dao`) | Entity Framework Core |
 | WorkManager | Hangfire / `BackgroundService` |
+| BiometricPrompt | Windows Hello |
 | Gradle (`build.gradle.kts`) | `.csproj` + NuGet |
 
 ## Estructura

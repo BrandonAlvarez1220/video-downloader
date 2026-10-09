@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
@@ -59,11 +60,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brandon.videodownloader.BuildConfig
 import com.brandon.videodownloader.data.Settings.ThemeMode
 import com.brandon.videodownloader.engine.Engine
 import com.brandon.videodownloader.engine.Quality
+import com.brandon.videodownloader.ui.AppLock
 import com.brandon.videodownloader.ui.MainViewModel
 import com.brandon.videodownloader.ui.components.SectionHeader
 
@@ -80,6 +83,7 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
     val metadata by s.embedMetadata.collectAsStateWithLifecycle()
     val theme by s.theme.collectAsStateWithLifecycle()
     val privateMode by s.privateMode.collectAsStateWithLifecycle()
+    val appLock by s.appLock.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
@@ -122,6 +126,24 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
                     Icons.Filled.Lock, "Modo privado",
                     "Lo nuevo se guarda en una bóveda dentro de la app: no aparece en la galería",
                 ) { Switch(privateMode, onCheckedChange = s::setPrivateMode) }
+                SettingRow(
+                    Icons.Filled.Fingerprint, "Bloqueo con huella",
+                    "Pide huella, rostro o PIN al abrir la app y la oculta en Recientes",
+                ) {
+                    Switch(appLock, onCheckedChange = { enable ->
+                        val activity = context as? FragmentActivity
+                        when {
+                            activity == null -> Unit
+                            !AppLock.canAuthenticate(context) ->
+                                vm.toast("Primero configura una huella o un PIN en los ajustes del teléfono")
+                            // Pedimos la huella también para APAGARLO: si alguien toma tu teléfono
+                            // desbloqueado no podría quitar el bloqueo sin ti.
+                            else -> AppLock.authenticate(
+                                activity, if (enable) "Activar bloqueo" else "Desactivar bloqueo",
+                            ) { s.setAppLock(enable) }
+                        }
+                    })
+                }
             }
 
             SectionHeader("Contenido", Modifier.padding(top = 8.dp))

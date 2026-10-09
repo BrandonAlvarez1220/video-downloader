@@ -32,6 +32,9 @@ class Settings(context: Context) {
     private val _privateMode = MutableStateFlow(prefs.getBoolean(K_PRIVATE, false))
     val privateMode: StateFlow<Boolean> = _privateMode.asStateFlow()
 
+    private val _appLock = MutableStateFlow(prefs.getBoolean(K_LOCK, false))
+    val appLock: StateFlow<Boolean> = _appLock.asStateFlow()
+
     private val _theme = MutableStateFlow(
         runCatching { ThemeMode.valueOf(prefs.getString(K_THEME, null)!!) }.getOrDefault(ThemeMode.SYSTEM)
     )
@@ -43,6 +46,7 @@ class Settings(context: Context) {
     fun setSponsorBlock(v: Boolean) { _sponsorBlock.value = v; prefs.edit().putBoolean(K_SPONSOR, v).apply() }
     fun setEmbedMetadata(v: Boolean) { _embedMetadata.value = v; prefs.edit().putBoolean(K_METADATA, v).apply() }
     fun setPrivateMode(v: Boolean) { _privateMode.value = v; prefs.edit().putBoolean(K_PRIVATE, v).apply() }
+    fun setAppLock(v: Boolean) { _appLock.value = v; prefs.edit().putBoolean(K_LOCK, v).apply() }
     fun setTheme(v: ThemeMode) { _theme.value = v; prefs.edit().putString(K_THEME, v.name).apply() }
 
     private companion object {
@@ -53,5 +57,6 @@ class Settings(context: Context) {
         const val K_METADATA = "embed_metadata"
         const val K_THEME = "theme"
         const val K_PRIVATE = "private_mode"
+        const val K_LOCK = "app_lock"
     }
 }

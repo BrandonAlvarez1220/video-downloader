@@ -91,6 +91,10 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("androidx.core:core-ktx:1.15.0")
 
+    // Bloqueo con huella/rostro/PIN usando el diálogo oficial del sistema.
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
+
     // Descargas en segundo plano que sobreviven a cerrar la app.
     implementation("androidx.work:work-runtime-ktx:2.10.0")
 
