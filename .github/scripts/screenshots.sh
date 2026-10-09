@@ -29,18 +29,29 @@ wait_gone() {
   done
   return 1
 }
+# El emulador en la nube es lento y a veces el launcher del sistema muestra "isn't responding".
+dismiss_anr() {
+  local xy; xy=$(python3 .github/scripts/ui.py /tmp/ui.xml "Wait")
+  [ -n "$xy" ] && { echo "  (cerrando aviso ANR)"; adb shell input tap $xy; sleep 1; dump; }
+  return 0
+}
 tap() {
-  local xy; xy=$(find_xy "$@")
+  dump; dismiss_anr
+  local xy; xy=$(python3 .github/scripts/ui.py /tmp/ui.xml "$@")
   if [ -n "$xy" ]; then adb shell input tap $xy; sleep 1.5; return 0; fi
   echo "  (no se encontró para tocar: $1)"; return 1
 }
-shot() { sleep "${2:-1.5}"; adb exec-out screencap -p > "$OUT/$1.png"; echo "📸 $1"; }
+shot() { sleep "${2:-1.5}"; dump; dismiss_anr; adb exec-out screencap -p > "$OUT/$1.png"; echo "📸 $1"; }
 share() { adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT "'$1'" -n "$PKG/.ui.MainActivity" >/dev/null; }
 scroll_down() { adb shell input swipe 540 1700 540 700 400; sleep 1; }
 
 echo "== Instalando $APK"
 adb install -r -g "$APK"
 adb shell cmd uimode night yes
+# Oculta los diálogos de "app no responde" del sistema (son del emulador, no de nuestra app).
+adb shell settings put global hide_error_dialogs 1
+adb shell settings put global anr_show_background 0
+sleep 20 # deja que el launcher termine de arrancar
 adb shell settings put system screen_off_timeout 1800000
 
 echo "== Inicio"
@@ -62,7 +73,7 @@ scroll_down
 shot 04-calidades
 
 echo "== Descargar (video 720p) + segundo enlace como audio"
-tap "480p"
+tap "360p"
 tap "Descargar video"
 share "$URL2"
 wait_for "Descarga rápida" 30
@@ -73,7 +84,7 @@ sleep 4
 shot 05-cola-descargando 1
 
 echo "== Esperando a que terminen las descargas"
-wait_for "Nada en la cola" 400
+wait_for "Nada en la cola" 900
 tap "Biblioteca"
 shot 06-biblioteca 4
 tap "Cambiar vista"
