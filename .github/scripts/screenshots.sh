@@ -6,9 +6,9 @@ PKG=com.brandon.videodownloader
 APK=$(ls app/build/outputs/apk/release/*x86_64*.apk | head -1)
 OUT=screenshots
 mkdir -p "$OUT"
-# Videos de prueba con licencia libre (Blender Foundation, CC-BY).
-URL1="https://vimeo.com/1084537"
-URL2="https://vimeo.com/76979871"
+# Videos de prueba de dominio público / CC-BY alojados en archive.org (no requieren cuenta).
+URL1="https://archive.org/details/BigBuckBunny_124"
+URL2="https://archive.org/details/ElephantsDream"
 
 dump() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb pull /sdcard/ui.xml /tmp/ui.xml >/dev/null 2>&1; }
 find_xy() { dump; python3 .github/scripts/ui.py /tmp/ui.xml "$@"; }
@@ -62,7 +62,7 @@ scroll_down
 shot 04-calidades
 
 echo "== Descargar (video 720p) + segundo enlace como audio"
-tap "720p"
+tap "480p"
 tap "Descargar video"
 share "$URL2"
 wait_for "Descarga rápida" 30

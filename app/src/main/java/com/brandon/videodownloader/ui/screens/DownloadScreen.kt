@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -217,9 +216,16 @@ fun PreviewSection(analysis: Analysis, onRetry: () -> Unit, onLogin: () -> Unit)
                         Text("No se pudo analizar", style = MaterialTheme.typography.titleSmall)
                         Text(a.message, style = MaterialTheme.typography.bodySmall, maxLines = 4, overflow = TextOverflow.Ellipsis)
                         if (needsLogin(a.message)) {
-                            TextButton(onClick = onLogin, contentPadding = PaddingValues(0.dp)) {
-                                Text("Este video pide iniciar sesión → Iniciar sesión")
-                            }
+                            Text(
+                                "Este video pide iniciar sesión → Iniciar sesión",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .padding(top = 8.dp)
+                                    .clip(MaterialTheme.shapes.small)
+                                    .clickable(onClick = onLogin)
+                                    .padding(vertical = 4.dp),
+                            )
                         }
                     }
                     IconButton(onClick = onRetry) { Icon(Icons.Filled.Refresh, "Reintentar") }
