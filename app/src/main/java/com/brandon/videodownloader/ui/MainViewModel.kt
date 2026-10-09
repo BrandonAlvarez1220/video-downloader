@@ -11,7 +11,10 @@ import com.brandon.videodownloader.App
 import com.brandon.videodownloader.data.Download
 import com.brandon.videodownloader.engine.Engine
 import com.brandon.videodownloader.engine.ProbeResult
+import com.brandon.videodownloader.engine.Quality
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -26,6 +29,7 @@ import kotlinx.coroutines.launch
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as App
     private val controller = app.downloads
+    val settings = app.settings
 
     sealed interface Analysis {
         data object Idle : Analysis
@@ -34,16 +38,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         data class Failed(val message: String) : Analysis
     }
 
-    // ---- estado observable por la UI (Compose se redibuja cuando cambian) ----
+    /** Pantallas que se abren encima de las pestañas. */
+    sealed interface Overlay {
+        data object Settings : Overlay
+        data class Player(val download: Download) : Overlay
+    }
+
+    enum class LibraryFilter { ALL, VIDEO, AUDIO }
+    enum class LibrarySort(val label: String) { RECENT("Recientes"), NAME("Nombre"), SIZE("Tamaño") }
+
+    // ---- navegación ----
     var tab by mutableIntStateOf(0)
+    var overlay by mutableStateOf<Overlay?>(null)
+
+    // ---- pestaña Descargar ----
     var input by mutableStateOf("")
         private set
-    var quality by mutableStateOf("1080")
+    var quality by mutableStateOf(settings.defaultQuality.value)
+        private set
+    private var lastVideoQuality = quality.takeIf { it != Quality.AUDIO } ?: "1080"
     var analysis by mutableStateOf<Analysis>(Analysis.Idle)
         private set
     var busyMessage by mutableStateOf<String?>(null)
         private set
+    /** Hoja inferior de descarga rápida (cuando llega un enlace desde "Compartir"). */
+    var quickSheet by mutableStateOf(false)
+
+    // ---- pestaña Biblioteca ----
     var search by mutableStateOf("")
+    var libraryFilter by mutableStateOf(LibraryFilter.ALL)
+    var librarySite by mutableStateOf<String?>(null)
+    var librarySort by mutableStateOf(LibrarySort.RECENT)
+    var libraryGrid by mutableStateOf(true)
+
+    var updatingEngine by mutableStateOf(false)
+        private set
 
     val engineState: StateFlow<Engine.State> = app.engine.state
     val queue: StateFlow<List<Download>> = app.database.downloads().observeQueue()
@@ -56,30 +85,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val messages = _messages.receiveAsFlow()
 
     val urls: List<String> get() = extractUrls(input)
+    val isAudio: Boolean get() = quality == Quality.AUDIO
+
+    private var analyzeJob: Job? = null
 
     fun onInputChange(text: String) {
         input = text
-        val a = analysis
-        if (a is Analysis.Done && urls.singleOrNull() != a.url) analysis = Analysis.Idle
-        if (a is Analysis.Failed) analysis = Analysis.Idle
+        val single = urls.singleOrNull()
+        val current = analysis
+        if (single == null) {
+            analyzeJob?.cancel()
+            analysis = Analysis.Idle
+            return
+        }
+        val alreadyFor = (current as? Analysis.Done)?.url
+        if (alreadyFor == single || analyzingUrl == single) return
+        // "Debounce": espera a que dejes de escribir antes de analizar.
+        analyzeJob?.cancel()
+        analyzeJob = viewModelScope.launch {
+            delay(500)
+            analyzeNow(single)
+        }
     }
 
-    /** Llamado cuando otra app "comparte" un enlace hacia esta. */
+    fun selectQuality(q: String) {
+        quality = q
+        if (q != Quality.AUDIO) lastVideoQuality = q
+    }
+
+    fun setAudioMode(audio: Boolean) = selectQuality(if (audio) Quality.AUDIO else lastVideoQuality)
+
+    /** Llamado cuando otra app "comparte" un enlace hacia esta: abre la hoja rápida. */
     fun onSharedText(text: String) {
         tab = 0
-        onInputChange(text)
-        if (urls.size == 1) analyze()
+        overlay = null
+        input = text
+        val url = urls.firstOrNull() ?: return
+        quickSheet = true
+        analyzeJob?.cancel()
+        analyzeJob = viewModelScope.launch { analyzeNow(url) }
     }
 
-    fun analyze() {
+    fun retryAnalysis() {
         val url = urls.singleOrNull() ?: return
+        analyzeJob?.cancel()
+        analyzeJob = viewModelScope.launch { analyzeNow(url) }
+    }
+
+    private var analyzingUrl: String? = null
+
+    private suspend fun analyzeNow(url: String) {
+        analyzingUrl = url
         analysis = Analysis.Loading
-        viewModelScope.launch {
-            analysis = try {
-                Analysis.Done(url, app.engine.probe(url))
-            } catch (e: Exception) {
-                Analysis.Failed(shortError(e))
-            }
+        try {
+            analysis = Analysis.Done(url, app.engine.probe(url))
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            analysis = Analysis.Failed(shortError(e))
+        } finally {
+            if (analyzingUrl == url) analyzingUrl = null
         }
     }
 
@@ -90,7 +155,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             var added = 0
             list.forEachIndexed { i, url ->
-                busyMessage = if (list.size > 1) "Analizando ${i + 1} de ${list.size}…" else "Analizando…"
+                busyMessage = if (list.size > 1) "Analizando ${i + 1} de ${list.size}…" else "Preparando…"
                 // Reutiliza el análisis si ya se hizo para esta URL.
                 val known = (analysis as? Analysis.Done)?.takeIf { it.url == url }?.result
                 val result = known ?: runCatching { app.engine.probe(url) }.getOrNull()
@@ -104,9 +169,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             busyMessage = null
             input = ""
             analysis = Analysis.Idle
-            _messages.send(if (added == 1) "1 descarga agregada" else "$added descargas agregadas")
+            quickSheet = false
+            _messages.send(if (added == 1) "Descarga agregada a la cola" else "$added descargas agregadas a la cola")
             tab = 1
         }
+    }
+
+    fun dismissQuickSheet() {
+        quickSheet = false
     }
 
     fun cancel(id: Long) = viewModelScope.launch { controller.cancel(id) }
@@ -118,13 +188,40 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _messages.send("Eliminado")
     }
 
-    fun updateEngine() = viewModelScope.launch {
-        _messages.send("Buscando actualización de yt-dlp…")
-        val msg = runCatching { app.engine.update() }.getOrElse { "No se pudo actualizar: ${shortError(it)}" }
-        _messages.send(msg)
+    fun updateEngine() {
+        if (updatingEngine) return
+        updatingEngine = true
+        viewModelScope.launch {
+            val msg = runCatching { app.engine.update() }.getOrElse { "No se pudo actualizar: ${shortError(it)}" }
+            updatingEngine = false
+            _messages.send(msg)
+        }
     }
 
     fun toast(message: String) = viewModelScope.launch { _messages.send(message) }
+
+    /** Filtro + búsqueda + orden de la biblioteca (en memoria: son pocos cientos de filas). */
+    fun filterLibrary(all: List<Download>): List<Download> {
+        val q = search.trim()
+        return all.asSequence()
+            .filter {
+                when (libraryFilter) {
+                    LibraryFilter.ALL -> true
+                    LibraryFilter.AUDIO -> it.mimeType?.startsWith("audio/") == true
+                    LibraryFilter.VIDEO -> it.mimeType?.startsWith("audio/") != true
+                }
+            }
+            .filter { librarySite == null || it.site == librarySite }
+            .filter { q.isEmpty() || listOfNotNull(it.title, it.uploader, it.site).any { s -> s.contains(q, true) } }
+            .let { seq ->
+                when (librarySort) {
+                    LibrarySort.RECENT -> seq.sortedByDescending { it.finishedAt ?: it.createdAt }
+                    LibrarySort.NAME -> seq.sortedBy { (it.title ?: it.fileName ?: "").lowercase() }
+                    LibrarySort.SIZE -> seq.sortedByDescending { it.fileSize ?: 0 }
+                }
+            }
+            .toList()
+    }
 
     companion object {
         private val urlRegex = Regex("""https?://[^\s<>"']+""")

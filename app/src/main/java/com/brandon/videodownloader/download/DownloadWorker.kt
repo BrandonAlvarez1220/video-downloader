@@ -18,8 +18,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -50,8 +48,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             // Si la app está en segundo plano, Android 12+ puede negarlo; la descarga sigue igual.
             runCatching { setForeground(foregroundInfo(id, title, null, "En cola")) }
             app.engine.awaitReady()
-            // Semáforo = máximo N descargas simultáneas; las demás esperan aquí su turno.
-            slots.withPermit { download(id, title) }
+            // Máximo N descargas simultáneas (configurable); las demás esperan aquí su turno.
+            DownloadSlots.withSlot({ app.settings.maxConcurrent.value }) { download(id, title) }
             Result.success()
         } catch (e: CancellationException) {
             // WorkManager detuvo el trabajo. Si NO fue el usuario (p. ej. se fue la red),
@@ -95,6 +93,18 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             } else {
                 addOption("--merge-output-format", "mp4") // MP4 = se reproduce en cualquier lado
             }
+            if (app.settings.sponsorBlock.value) {
+                // SponsorBlock: base de datos colaborativa que marca los segmentos de patrocinio
+                // DENTRO de los videos de YouTube. ffmpeg los recorta del archivo final.
+                addOption("--sponsorblock-remove", "sponsor,selfpromo,interaction")
+            }
+            if (app.settings.embedMetadata.value) {
+                addOption("--embed-metadata") // título, artista, fecha dentro del archivo
+                if (audioOnly) {
+                    addOption("--embed-thumbnail") // carátula en el MP3
+                    addOption("--convert-thumbnails", "jpg")
+                }
+            }
         }
 
         // El callback llega desde el hilo que lee la salida de yt-dlp, muchas veces por segundo.
@@ -130,7 +140,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
         // Tras el merge/conversión solo queda el archivo final (+ el .info.json).
         val media = dir.listFiles()
-            ?.filter { it.isFile && !it.name.endsWith(".json") && !it.name.endsWith(".part") && !it.name.endsWith(".ytdl") }
+            ?.filter { it.isFile && it.extension !in setOf("json", "part", "ytdl", "jpg", "webp", "png") }
             ?.maxByOrNull { it.length() }
             ?: error("yt-dlp terminó pero no se encontró el archivo descargado")
         val info = dir.listFiles()?.firstOrNull { it.name.endsWith(".info.json") }
@@ -186,8 +196,6 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
     companion object {
         const val KEY_ID = "download_id"
-        const val MAX_CONCURRENT = 3
-        private val slots = Semaphore(MAX_CONCURRENT)
     }
 }
 

@@ -4,15 +4,43 @@ App Android de uso personal para descargar videos de casi cualquier sitio sin an
 YouTube, TikTok, Instagram, Facebook, X/Twitter, Vimeo, Twitch, Reddit y [+1800 sitios](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md).
 
 **Funciones**
-- Pegas uno o varios enlaces (o usas **Compartir → Video Downloader** desde cualquier app).
-- Eliges la calidad: Máxima, 4K, 2K, 1080p, 720p, 480p, 360p o **solo audio (MP3)**.
-- Antes de bajar, "Analizar" te muestra miniatura, duración y las resoluciones disponibles.
-- **Descargas múltiples**: hasta 3 a la vez, el resto espera en cola. Puedes cancelar y reintentar.
+- Pegas uno o varios enlaces, o usas **Compartir → Video Downloader** desde cualquier app.
+  Al compartir se abre una **hoja rápida**: eliges calidad y descargas sin salir de lo que veías.
+- Al pegar un enlace, la app lo **analiza sola**: miniatura, duración, canal y las resoluciones
+  disponibles con el **tamaño estimado** de cada una.
+- Formato **Video** (Máxima, 4K, 2K, 1080p, 720p, 480p, 360p) o **Solo audio** (MP3 con carátula).
+- **Descargas múltiples**: de 1 a 5 a la vez (configurable). Puedes cancelar, reintentar o deslizar para quitar.
 - Las descargas siguen con la app cerrada, con su notificación de progreso.
 - Las **listas de reproducción** se separan en un video por descarga.
-- **Biblioteca**: buscar, reproducir, compartir y borrar. Los archivos van a la galería:
-  `Movies/VideoDownloader` (video) y `Music/VideoDownloader` (audio).
-- yt-dlp se actualiza solo una vez al día, y también desde el menú ⋮.
+- **SponsorBlock**: recorta los patrocinios que el youtuber mete *dentro* del video.
+- **Biblioteca**: cuadrícula o lista, búsqueda, filtros por tipo y sitio, orden y **reproductor integrado**.
+  Los archivos también van a la galería: `Movies/VideoDownloader` (video) y `Music/VideoDownloader` (audio).
+- **Ajustes**: calidad predeterminada, descargas simultáneas, solo Wi-Fi, tema claro/oscuro/sistema.
+- yt-dlp se actualiza solo una vez al día, y también desde Ajustes.
+
+## Diseño
+
+- Sistema de diseño propio en `ui/theme/Theme.kt`: paleta oscura de marca (violeta → rosa),
+  esquinas redondeadas generosas y tipografía con jerarquía clara.
+- Componentes en `ui/components/Components.kt`: botón con degradado, mosaicos de calidad,
+  insignias por plataforma, pastillas de estado, barras de progreso animadas y *skeleton loading*.
+- Material 3 + Jetpack Compose: hoja inferior, botones segmentados, chips de filtro,
+  deslizar para quitar, transiciones animadas y pantalla completa inmersiva en el reproductor.
+
+## ¿Qué enlaces acepta?
+
+| Tipo | Ejemplos | ¿Funciona? |
+|---|---|---|
+| Redes y plataformas de video | YouTube (incl. Shorts y listas), TikTok, Instagram (Reels/posts), Facebook, X/Twitter, Threads, Reddit, Pinterest, Vimeo, Dailymotion, Bilibili | ✅ |
+| Streaming y clips | Twitch (VODs y clips), Kick, YouTube en vivo (desde el momento actual) | ✅ |
+| Audio | SoundCloud, Bandcamp, Mixcloud, audio de cualquier video | ✅ |
+| Archivos directos | Enlaces que terminan en `.mp4`, `.webm`, `.mov`, `.mp3`… | ✅ |
+| Streams "en trozos" | `.m3u8` (HLS) y `.mpd` (DASH): muchas páginas de noticias, cursos, TV en línea | ✅ |
+| Páginas con un reproductor incrustado | Blogs y sitios que embeben video con `<video>`, JW Player, etc. | ✅ casi siempre |
+| Contenido privado o con login | Videos privados, +18 de YouTube, Instagram/Facebook privados | ⚠️ requiere iniciar sesión (cookies), aún no integrado |
+| Plataformas con DRM | Netflix, Prime Video, Disney+, HBO Max, Spotify, Apple Music | ❌ protegido por cifrado; ninguna herramienta legal lo descarga |
+
+La lista oficial completa (+1800 sitios) está en Ajustes → *Sitios compatibles*.
 
 ## Instalarla en tu celular (sin Android Studio)
 

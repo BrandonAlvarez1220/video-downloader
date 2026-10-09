@@ -15,6 +15,9 @@ sealed interface ProbeResult {
         val durationSec: Long?,
         /** Resoluciones disponibles, de mayor a menor (p. ej. [2160, 1080, 720]). */
         val heights: List<Int>,
+        /** Tamaño estimado (video + mejor audio) por resolución, si el sitio lo informa. */
+        val sizes: Map<Int, Long> = emptyMap(),
+        val audioSize: Long? = null,
     ) : ProbeResult
 
     data class Playlist(
@@ -38,11 +41,18 @@ sealed interface ProbeResult {
 
         private fun videoFrom(o: JSONObject, url: String): Video {
             val formats = o.optJSONArray("formats").orEmpty()
-            val heights = formats
-                .filter { f -> f.optString("vcodec", "none") != "none" && f.optInt("height", 0) > 0 }
-                .map { it.optInt("height") }
-                .distinct()
-                .sortedDescending()
+            val videoFormats = formats.filter { f ->
+                f.optString("vcodec", "none") != "none" && f.optInt("height", 0) > 0
+            }
+            val heights = videoFormats.map { it.optInt("height") }.distinct().sortedDescending()
+            // Audio-only = vcodec "none" y acodec distinto de "none".
+            val audioSize = formats
+                .filter { it.optString("vcodec") == "none" && it.optString("acodec", "none") != "none" }
+                .mapNotNull { it.bytes() }
+                .maxOrNull()
+            val sizes = heights.associateWith { h ->
+                videoFormats.filter { it.optInt("height") == h }.mapNotNull { it.bytes() }.maxOrNull()
+            }.filterValues { it != null }.mapValues { (_, v) -> v!! + (audioSize ?: 0L) }
             return Video(
                 url = url,
                 title = o.str("title"),
@@ -51,11 +61,19 @@ sealed interface ProbeResult {
                 thumbnail = o.str("thumbnail") ?: lastThumbnail(o),
                 durationSec = o.optDouble("duration").takeIf { !it.isNaN() }?.toLong(),
                 heights = heights,
+                sizes = sizes,
+                audioSize = audioSize,
             )
         }
 
         private fun lastThumbnail(o: JSONObject): String? =
             o.optJSONArray("thumbnails").orEmpty().lastOrNull()?.str("url")
+
+        private fun JSONObject.bytes(): Long? {
+            val exact = optLong("filesize", 0)
+            val approx = optLong("filesize_approx", 0)
+            return (if (exact > 0) exact else approx).takeIf { it > 0 }
+        }
 
         /** org.json devuelve "null" (texto) o "" en vez de null; normalizamos. */
         private fun JSONObject.str(key: String): String? =

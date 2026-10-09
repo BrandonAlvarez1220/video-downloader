@@ -10,40 +10,60 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Downloading
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.Downloading
+import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brandon.videodownloader.data.Status
-import com.brandon.videodownloader.engine.Engine
+import com.brandon.videodownloader.ui.components.GradientIcon
 import com.brandon.videodownloader.ui.screens.DownloadScreen
 import com.brandon.videodownloader.ui.screens.LibraryScreen
+import com.brandon.videodownloader.ui.screens.PlayerScreen
 import com.brandon.videodownloader.ui.screens.QueueScreen
+import com.brandon.videodownloader.ui.screens.QuickDownloadContent
+import com.brandon.videodownloader.ui.screens.SettingsScreen
 import com.brandon.videodownloader.ui.theme.AppTheme
 
 class MainActivity : ComponentActivity() {
@@ -53,7 +73,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (savedInstanceState == null) handleShare(intent)
-        setContent { AppTheme { MainScreen(vm) } }
+        setContent {
+            val theme by vm.settings.theme.collectAsStateWithLifecycle()
+            AppTheme(theme) { Root(vm) }
+        }
     }
 
     // launchMode="singleTop": si la app ya está abierta y compartes otro enlace, llega aquí.
@@ -68,6 +91,35 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+
+/** Raíz: pestañas principales + pantallas superpuestas (Ajustes, Reproductor) con transición. */
+@Composable
+private fun Root(vm: MainViewModel) {
+    val engine by vm.engineState.collectAsStateWithLifecycle()
+    AnimatedContent(
+        targetState = vm.overlay,
+        transitionSpec = {
+            if (targetState != null) (slideInHorizontally { it / 3 } + fadeIn()) togetherWith fadeOut()
+            else fadeIn() togetherWith (slideOutHorizontally { it / 3 } + fadeOut())
+        },
+        contentKey = { it?.javaClass },
+        label = "overlay",
+    ) { overlay ->
+        when (overlay) {
+            null -> MainScreen(vm)
+            MainViewModel.Overlay.Settings -> SettingsScreen(vm, engine, onClose = { vm.overlay = null })
+            is MainViewModel.Overlay.Player -> PlayerScreen(overlay.download, onClose = { vm.overlay = null })
+        }
+    }
+}
+
+private data class Tab(val label: String, val selected: ImageVector, val unselected: ImageVector)
+
+private val tabs = listOf(
+    Tab("Descargar", Icons.Filled.Download, Icons.Outlined.Download),
+    Tab("Cola", Icons.Filled.Downloading, Icons.Outlined.Downloading),
+    Tab("Biblioteca", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,56 +139,69 @@ private fun MainScreen(vm: MainViewModel) {
     }
 
     Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Video Downloader") },
-                actions = { OverflowMenu(engine, onUpdate = vm::updateEngine) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        GradientIcon(Icons.Filled.Download, size = 32.dp, iconSize = 18.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Video Downloader", style = MaterialTheme.typography.titleLarge)
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { vm.overlay = MainViewModel.Overlay.Settings }) {
+                        Icon(Icons.Filled.Settings, "Ajustes")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background),
             )
         },
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = vm.tab == 0, onClick = { vm.tab = 0 },
-                    icon = { Icon(Icons.Filled.Download, null) }, label = { Text("Descargar") },
-                )
-                NavigationBarItem(
-                    selected = vm.tab == 1, onClick = { vm.tab = 1 },
-                    icon = {
-                        BadgedBox(badge = {
-                            if (activeCount > 0) Badge { Text("$activeCount") }
-                            else if (failedCount > 0) Badge { Text("!") }
-                        }) { Icon(Icons.Filled.Downloading, null) }
-                    },
-                    label = { Text("Cola") },
-                )
-                NavigationBarItem(
-                    selected = vm.tab == 2, onClick = { vm.tab = 2 },
-                    icon = { Icon(Icons.Filled.VideoLibrary, null) }, label = { Text("Biblioteca") },
-                )
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
+                tabs.forEachIndexed { i, tab ->
+                    val selected = vm.tab == i
+                    NavigationBarItem(
+                        selected = selected,
+                        onClick = { vm.tab = i },
+                        label = { Text(tab.label) },
+                        icon = {
+                            BadgedBox(badge = {
+                                if (i == 1 && activeCount > 0) Badge { Text("$activeCount") }
+                                else if (i == 1 && failedCount > 0) Badge { Text("!") }
+                            }) { Icon(if (selected) tab.selected else tab.unselected, null) }
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                    )
+                }
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Box(Modifier.padding(padding)) {
-            when (vm.tab) {
-                0 -> DownloadScreen(vm, engine)
-                1 -> QueueScreen(vm, queue)
-                else -> LibraryScreen(vm)
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            AnimatedContent(
+                targetState = vm.tab,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "tabs",
+            ) { tab ->
+                when (tab) {
+                    0 -> DownloadScreen(vm, engine)
+                    1 -> QueueScreen(vm, queue)
+                    else -> LibraryScreen(vm)
+                }
             }
         }
     }
-}
 
-@Composable
-private fun OverflowMenu(engine: Engine.State, onUpdate: () -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, "Más opciones") }
-    DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-        val version = (engine as? Engine.State.Ready)?.version ?: "—"
-        DropdownMenuItem(
-            text = { Text("Actualizar yt-dlp (actual: $version)") },
-            onClick = { open = false; onUpdate() },
-            enabled = engine is Engine.State.Ready,
-        )
+    // Hoja inferior al compartir un enlace desde otra app: eliges calidad y listo.
+    if (vm.quickSheet) {
+        ModalBottomSheet(
+            onDismissRequest = vm::dismissQuickSheet,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) { QuickDownloadContent(vm, engine) }
     }
 }

@@ -62,7 +62,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true // expone versionName a la pantalla "Acerca de"
+    }
 
     lint {
         // Proyecto personal: que una advertencia de lint no bloquee la compilación del APK.
@@ -96,6 +99,11 @@ dependencies {
     implementation("androidx.room:room-runtime:$room")
     implementation("androidx.room:room-ktx:$room")
     ksp("androidx.room:room-compiler:$room")
+
+    // Reproductor integrado (el mismo motor que usa la app de YouTube).
+    val media3 = "1.5.1"
+    implementation("androidx.media3:media3-exoplayer:$media3")
+    implementation("androidx.media3:media3-ui:$media3")
 
     // Carga de miniaturas desde internet.
     implementation("io.coil-kt:coil-compose:2.7.0")

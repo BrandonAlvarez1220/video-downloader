@@ -10,13 +10,18 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.brandon.videodownloader.data.Download
 import com.brandon.videodownloader.data.DownloadDao
+import com.brandon.videodownloader.data.Settings
 import com.brandon.videodownloader.data.Status
 import com.brandon.videodownloader.engine.ProbeResult
 import com.yausername.youtubedl_android.YoutubeDL
 import java.io.File
 
 /** Punto único para agregar/cancelar/reintentar/borrar descargas (lo usa la UI). */
-class DownloadController(private val context: Context, private val dao: DownloadDao) {
+class DownloadController(
+    private val context: Context,
+    private val dao: DownloadDao,
+    private val settings: Settings,
+) {
 
     private val workManager get() = WorkManager.getInstance(context)
 
@@ -74,7 +79,12 @@ class DownloadController(private val context: Context, private val dao: Download
     private fun schedule(id: Long) {
         val request = OneTimeWorkRequestBuilder<DownloadWorker>()
             .setInputData(workDataOf(DownloadWorker.KEY_ID to id))
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            // UNMETERED = solo redes que no cobran por datos (Wi-Fi).
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(if (settings.wifiOnly.value) NetworkType.UNMETERED else NetworkType.CONNECTED)
+                    .build()
+            )
             .addTag(TAG)
             .build()
         // "Unique work" por id: evita que la misma descarga se encole dos veces.
