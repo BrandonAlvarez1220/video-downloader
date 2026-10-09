@@ -60,6 +60,18 @@ wait_for "Descarga sin anuncios" 60
 wait_gone "Preparando el motor" 120
 shot 01-inicio
 
+echo "== Ajustes y cuentas"
+tap "Ajustes"
+shot 09-ajustes 2
+scroll_down
+shot 10-ajustes-2
+tap "Cuentas y sesiones"
+shot 11-cuentas 2
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+adb shell input keyevent KEYCODE_BACK
+sleep 1
+
 echo "== Compartir enlace desde otra app (hoja rápida)"
 share "$URL1"
 wait_for "Descarga rápida" 30
@@ -74,12 +86,12 @@ shot 04-calidades
 
 echo "== Descargar (video 720p) + segundo enlace como audio"
 tap "360p"
-tap "Descargar video"
+tap "Descargar " --contains
 share "$URL2"
 wait_for "Descarga rápida" 30
 sleep 3; wait_gone "Analizando enlace" 120; sleep 2
 tap "Solo audio"
-tap "Descargar audio"
+tap "Descargar " --contains
 sleep 4
 shot 05-cola-descargando 1
 
@@ -96,18 +108,6 @@ tap "Big Buck Bunny" --contains || adb shell input tap 300 900
 shot 08-reproductor 4
 adb shell input keyevent KEYCODE_BACK
 sleep 2
-
-echo "== Ajustes y cuentas"
-tap "Ajustes"
-shot 09-ajustes 2
-scroll_down
-shot 10-ajustes-2
-tap "Cuentas y sesiones"
-shot 11-cuentas 2
-adb shell input keyevent KEYCODE_BACK
-sleep 1
-adb shell input keyevent KEYCODE_BACK
-sleep 1
 
 echo "== Tema claro"
 adb shell cmd uimode night no
