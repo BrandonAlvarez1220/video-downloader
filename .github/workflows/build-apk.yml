@@ -1,0 +1,58 @@
+# Compila el APK en la nube de GitHub (no necesitas Android Studio) y lo publica
+# en la sección "Releases" del repo, para descargarlo directo desde el celular.
+name: Build APK
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # necesario para crear/actualizar el Release
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Los runners de GitHub ya traen el Android SDK instalado (ANDROID_HOME).
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Renombrar APKs
+        run: |
+          mkdir -p out
+          for f in app/build/outputs/apk/release/*.apk; do
+            abi=$(basename "$f" | sed -E 's/app-(.*)-release\.apk/\1/')
+            cp "$f" "out/VideoDownloader-$abi.apk"
+          done
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apks
+          path: out/*.apk
+
+      # Un único Release "latest" que se reemplaza en cada build.
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest out/*.apk \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Última versión (${GITHUB_REF_NAME}, ${GITHUB_SHA::7})" \
+            --notes "Descarga **VideoDownloader-arm64-v8a.apk** (sirve para casi cualquier celular de los últimos ~8 años). Compilado automáticamente desde el commit ${GITHUB_SHA}."
