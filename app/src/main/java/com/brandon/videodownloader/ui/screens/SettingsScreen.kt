@@ -19,6 +19,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
@@ -76,6 +79,7 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
     val sponsor by s.sponsorBlock.collectAsStateWithLifecycle()
     val metadata by s.embedMetadata.collectAsStateWithLifecycle()
     val theme by s.theme.collectAsStateWithLifecycle()
+    val privateMode by s.privateMode.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
@@ -105,6 +109,19 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
                 SettingRow(Icons.Filled.Wifi, "Solo con Wi-Fi", "No gastar datos móviles (aplica a nuevas descargas)") {
                     Switch(wifiOnly, onCheckedChange = s::setWifiOnly)
                 }
+            }
+
+            SectionHeader("Privacidad", Modifier.padding(top = 8.dp))
+            Group {
+                SettingRow(
+                    Icons.Filled.AccountCircle, "Cuentas y sesiones",
+                    "Inicia sesión para videos +18, privados o de suscriptores",
+                    onClick = { vm.overlay = MainViewModel.Overlay.Accounts },
+                ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+                SettingRow(
+                    Icons.Filled.Lock, "Modo privado",
+                    "Lo nuevo se guarda en una bóveda dentro de la app: no aparece en la galería",
+                ) { Switch(privateMode, onCheckedChange = s::setPrivateMode) }
             }
 
             SectionHeader("Contenido", Modifier.padding(top = 8.dp))

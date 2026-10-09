@@ -15,6 +15,10 @@ YouTube, TikTok, Instagram, Facebook, X/Twitter, Vimeo, Twitch, Reddit y [+1800 
 - **SponsorBlock**: recorta los patrocinios que el youtuber mete *dentro* del video.
 - **Biblioteca**: cuadrícula o lista, búsqueda, filtros por tipo y sitio, orden y **reproductor integrado**.
   Los archivos también van a la galería: `Movies/VideoDownloader` (video) y `Music/VideoDownloader` (audio).
+- **Cuentas y sesiones**: inicias sesión en un navegador dentro de la app (YouTube, Instagram,
+  Facebook, X, TikTok, Reddit o cualquier otro sitio) para bajar contenido +18, privado o de suscriptores.
+  La sesión (cookies) se guarda solo en el teléfono.
+- **Modo privado**: lo descargado se guarda en una bóveda interna de la app (🔒), no en la galería.
 - **Ajustes**: calidad predeterminada, descargas simultáneas, solo Wi-Fi, tema claro/oscuro/sistema.
 - yt-dlp se actualiza solo una vez al día, y también desde Ajustes.
 
@@ -37,7 +41,8 @@ YouTube, TikTok, Instagram, Facebook, X/Twitter, Vimeo, Twitch, Reddit y [+1800 
 | Archivos directos | Enlaces que terminan en `.mp4`, `.webm`, `.mov`, `.mp3`… | ✅ |
 | Streams "en trozos" | `.m3u8` (HLS) y `.mpd` (DASH): muchas páginas de noticias, cursos, TV en línea | ✅ |
 | Páginas con un reproductor incrustado | Blogs y sitios que embeben video con `<video>`, JW Player, etc. | ✅ casi siempre |
-| Contenido privado o con login | Videos privados, +18 de YouTube, Instagram/Facebook privados | ⚠️ requiere iniciar sesión (cookies), aún no integrado |
+| Sitios para adultos | La mayoría de los sitios populares están soportados por yt-dlp, sin cuenta | ✅ |
+| Contenido con login | YouTube +18, videos privados, Instagram/Facebook privados, sitios premium | ✅ inicia sesión en Ajustes → *Cuentas y sesiones* |
 | Plataformas con DRM | Netflix, Prime Video, Disney+, HBO Max, Spotify, Apple Music | ❌ protegido por cifrado; ninguna herramienta legal lo descarga |
 
 La lista oficial completa (+1800 sitios) está en Ajustes → *Sitios compatibles*.
@@ -102,6 +107,12 @@ app/src/main/java/com/brandon/videodownloader/
 ├── download/                   # worker, controller, guardado en galería, notificaciones
 └── ui/                         # Activity, ViewModel, pantallas Descargar / Cola / Biblioteca
 ```
+
+## Capturas de pantalla
+
+El workflow `Screenshots` levanta un emulador Pixel 7 en GitHub, instala la app, la recorre
+(compartir enlace, analizar, descargar, biblioteca, reproductor, ajustes) y publica las capturas
+en **Releases → screenshots**.
 
 ## Compilar localmente (opcional)
 

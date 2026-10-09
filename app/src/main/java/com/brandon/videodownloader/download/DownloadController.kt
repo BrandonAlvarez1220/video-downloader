@@ -72,7 +72,13 @@ class DownloadController(
 
     /** Borra el archivo de la galería y el registro. */
     suspend fun deleteFromLibrary(d: Download) {
-        d.fileUri?.let { runCatching { context.contentResolver.delete(Uri.parse(it), null, null) } }
+        d.fileUri?.let { raw ->
+            val uri = Uri.parse(raw)
+            runCatching {
+                if (uri.scheme == "file") File(uri.path!!).delete()
+                else context.contentResolver.delete(uri, null, null)
+            }
+        }
         dao.delete(d.id)
     }
 

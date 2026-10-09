@@ -53,4 +53,26 @@ object MediaStoreSaver {
         }
         return Saved(uri, file.name, file.length(), mime)
     }
+
+    /**
+     * Modo privado: el archivo se queda en el almacenamiento INTERNO de la app.
+     * Ni la galería ni otras apps (ni un explorador de archivos sin root) pueden verlo;
+     * solo se ve y reproduce dentro de Video Downloader. Se borra si desinstalas la app.
+     */
+    fun savePrivate(context: Context, file: File): Saved {
+        val mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
+            ?: "application/octet-stream"
+        val dir = privateDir(context).apply { mkdirs() }
+        var dest = File(dir, file.name)
+        var n = 1
+        while (dest.exists()) dest = File(dir, "${file.nameWithoutExtension} (${n++}).${file.extension}")
+        // Mismo almacenamiento interno que la carpeta temporal: renameTo es instantáneo (no copia).
+        if (!file.renameTo(dest)) {
+            file.copyTo(dest)
+            file.delete()
+        }
+        return Saved(Uri.fromFile(dest), dest.name, dest.length(), mime)
+    }
+
+    fun privateDir(context: Context) = File(context.filesDir, "private")
 }

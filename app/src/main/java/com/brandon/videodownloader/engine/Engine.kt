@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import java.io.File
 
 /**
  * Envoltorio sobre youtubedl-android.
@@ -84,9 +85,16 @@ class Engine(private val context: Context, private val scope: CoroutineScope) {
         val request = YoutubeDLRequest(url)
             .addOption("--dump-single-json")
             .addOption("--flat-playlist")
+            .addOption("--no-playlist") // enlace de video dentro de una lista = solo ese video
             .addOption("--no-warnings")
-        val response = YoutubeDL.execute(request, null, null)
-        ProbeResult.parse(JSONObject(response.out), url)
+        val tmp = File(context.cacheDir, "probe/${System.nanoTime()}")
+        Accounts.cookiesCopyFor(context, tmp)?.let { request.addOption("--cookies", it.absolutePath) }
+        try {
+            val response = YoutubeDL.execute(request, null, null)
+            ProbeResult.parse(JSONObject(response.out), url)
+        } finally {
+            tmp.deleteRecursively()
+        }
     }
 
     companion object {

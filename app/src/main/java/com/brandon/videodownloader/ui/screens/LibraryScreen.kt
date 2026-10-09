@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -64,6 +65,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brandon.videodownloader.data.Download
 import com.brandon.videodownloader.ui.MainViewModel
@@ -77,6 +79,7 @@ import com.brandon.videodownloader.ui.components.Thumbnail
 import com.brandon.videodownloader.ui.formatBytes
 import com.brandon.videodownloader.ui.formatDuration
 import com.brandon.videodownloader.ui.formatResolution
+import java.io.File
 
 @Composable
 fun LibraryScreen(vm: MainViewModel) {
@@ -193,6 +196,9 @@ private fun LibraryHeader(vm: MainViewModel, all: List<Download>) {
             item { Chip("Todo", vm.libraryFilter == LibraryFilter.ALL && vm.librarySite == null) { vm.libraryFilter = LibraryFilter.ALL; vm.librarySite = null } }
             item { Chip("Videos", vm.libraryFilter == LibraryFilter.VIDEO) { vm.libraryFilter = LibraryFilter.VIDEO } }
             item { Chip("Audio", vm.libraryFilter == LibraryFilter.AUDIO) { vm.libraryFilter = LibraryFilter.AUDIO } }
+            if (all.any { it.isPrivate }) {
+                item { Chip("Privados", vm.libraryFilter == LibraryFilter.PRIVATE) { vm.libraryFilter = LibraryFilter.PRIVATE } }
+            }
             items(sites) { site ->
                 val p = Platform.fromSite(site, "")
                 Chip(p.name, vm.librarySite == site, dot = p.color) {
@@ -248,6 +254,7 @@ private fun GridItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             Thumbnail(d.thumbnail, Modifier.fillMaxSize(), isAudio)
             PlayBadge(Modifier.align(Alignment.Center))
             PlatformBadge(Platform.fromSite(d.site, d.url), Modifier.align(Alignment.TopStart).padding(6.dp))
+            if (d.isPrivate) PrivateBadge(Modifier.align(Alignment.TopEnd).padding(6.dp))
             formatDuration(d.durationSec).takeIf { it.isNotEmpty() }?.let {
                 OverlayLabel(it, Modifier.align(Alignment.BottomEnd).padding(6.dp))
             }
@@ -279,6 +286,7 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(width = 128.dp, height = 72.dp).clip(MaterialTheme.shapes.small)) {
                 Thumbnail(d.thumbnail, Modifier.fillMaxSize(), isAudio)
+                if (d.isPrivate) PrivateBadge(Modifier.align(Alignment.TopEnd).padding(4.dp))
                 formatDuration(d.durationSec).takeIf { it.isNotEmpty() }?.let {
                     OverlayLabel(it, Modifier.align(Alignment.BottomEnd).padding(4.dp))
                 }
@@ -299,6 +307,17 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             ItemMenu(d, actions)
         }
     }
+}
+
+private val Download.isPrivate get() = fileUri?.startsWith("file:") == true
+
+/** Candado: el archivo está en la bóveda privada (no aparece en la galería). */
+@Composable
+private fun PrivateBadge(modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.62f)),
+        contentAlignment = Alignment.Center,
+    ) { Icon(Icons.Filled.Lock, "Privado", tint = Color.White, modifier = Modifier.size(14.dp)) }
 }
 
 @Composable
@@ -340,9 +359,21 @@ private fun meta(d: Download, isAudio: Boolean) =
     listOf(if (isAudio) "MP3" else formatResolution(d.width, d.height), formatBytes(d.fileSize))
         .filter { it.isNotEmpty() }.joinToString(" · ")
 
+/**
+ * Los archivos del modo privado son `file://` internos: otras apps no pueden leerlos.
+ * FileProvider genera un `content://` temporal con permiso SOLO para la app que elijas.
+ */
+private fun externalUri(context: Context, d: Download): Uri? {
+    val uri = d.fileUri?.let(Uri::parse) ?: return null
+    if (uri.scheme != "file") return uri
+    return runCatching {
+        FileProvider.getUriForFile(context, "${context.packageName}.files", File(uri.path!!))
+    }.getOrNull()
+}
+
 /** Abre el archivo con otra app (VLC, MX Player, Fotos…). */
 private fun openExternal(context: Context, d: Download): Boolean {
-    val uri = d.fileUri?.let(Uri::parse) ?: return false
+    val uri = externalUri(context, d) ?: return false
     val intent = Intent(Intent.ACTION_VIEW)
         .setDataAndType(uri, d.mimeType ?: "video/*")
         .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -355,7 +386,7 @@ private fun openExternal(context: Context, d: Download): Boolean {
 }
 
 private fun share(context: Context, d: Download) {
-    val uri = d.fileUri?.let(Uri::parse) ?: return
+    val uri = externalUri(context, d) ?: return
     val send = Intent(Intent.ACTION_SEND)
         .setType(d.mimeType ?: "video/*")
         .putExtra(Intent.EXTRA_STREAM, uri)

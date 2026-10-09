@@ -35,6 +35,17 @@
             </intent-filter>
         </activity>
 
+        <!-- Comparte archivos del modo privado con permisos temporales, sin hacerlos públicos. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- WorkManager usa este servicio para las tareas en primer plano; declaramos su tipo. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"

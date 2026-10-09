@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brandon.videodownloader.data.Status
 import com.brandon.videodownloader.ui.components.GradientIcon
+import com.brandon.videodownloader.ui.screens.AccountsScreen
 import com.brandon.videodownloader.ui.screens.DownloadScreen
 import com.brandon.videodownloader.ui.screens.LibraryScreen
 import com.brandon.videodownloader.ui.screens.PlayerScreen
@@ -109,6 +110,7 @@ private fun Root(vm: MainViewModel) {
             null -> MainScreen(vm)
             MainViewModel.Overlay.Settings -> SettingsScreen(vm, engine, onClose = { vm.overlay = null })
             is MainViewModel.Overlay.Player -> PlayerScreen(overlay.download, onClose = { vm.overlay = null })
+            MainViewModel.Overlay.Accounts -> AccountsScreen(vm, onClose = { vm.overlay = MainViewModel.Overlay.Settings })
         }
     }
 }

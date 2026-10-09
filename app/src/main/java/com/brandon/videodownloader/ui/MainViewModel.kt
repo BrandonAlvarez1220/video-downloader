@@ -42,9 +42,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     sealed interface Overlay {
         data object Settings : Overlay
         data class Player(val download: Download) : Overlay
+        data object Accounts : Overlay
     }
 
-    enum class LibraryFilter { ALL, VIDEO, AUDIO }
+    enum class LibraryFilter { ALL, VIDEO, AUDIO, PRIVATE }
     enum class LibrarySort(val label: String) { RECENT("Recientes"), NAME("Nombre"), SIZE("Tamaño") }
 
     // ---- navegación ----
@@ -209,6 +210,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     LibraryFilter.ALL -> true
                     LibraryFilter.AUDIO -> it.mimeType?.startsWith("audio/") == true
                     LibraryFilter.VIDEO -> it.mimeType?.startsWith("audio/") != true
+                    LibraryFilter.PRIVATE -> it.fileUri?.startsWith("file:") == true
                 }
             }
             .filter { librarySite == null || it.site == librarySite }

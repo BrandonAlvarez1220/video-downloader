@@ -7,6 +7,7 @@ import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.brandon.videodownloader.App
 import com.brandon.videodownloader.data.Status
+import com.brandon.videodownloader.engine.Accounts
 import com.brandon.videodownloader.engine.Quality
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
@@ -93,6 +94,9 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             } else {
                 addOption("--merge-output-format", "mp4") // MP4 = se reproduce en cualquier lado
             }
+            // Sesión iniciada en "Cuentas": contenido +18, privado o de suscriptores.
+            Accounts.cookiesCopyFor(applicationContext, File(dir, "session"))
+                ?.let { addOption("--cookies", it.absolutePath) }
             if (app.settings.sponsorBlock.value) {
                 // SponsorBlock: base de datos colaborativa que marca los segmentos de patrocinio
                 // DENTRO de los videos de YouTube. ffmpeg los recorta del archivo final.
@@ -139,6 +143,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         }
 
         // Tras el merge/conversión solo queda el archivo final (+ el .info.json).
+        File(dir, "session").deleteRecursively()
         val media = dir.listFiles()
             ?.filter { it.isFile && it.extension !in setOf("json", "part", "ytdl", "jpg", "webp", "png") }
             ?.maxByOrNull { it.length() }
@@ -147,8 +152,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             ?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
 
         dao.advanceStatus(id, Status.PROCESSING)
-        dao.setProgress(id, 100f, "Guardando en la galería…")
-        val saved = MediaStoreSaver.save(applicationContext, media)
+        val private = app.settings.privateMode.value
+        dao.setProgress(id, 100f, if (private) "Guardando en la bóveda privada…" else "Guardando en la galería…")
+        val saved = if (private) MediaStoreSaver.savePrivate(applicationContext, media)
+        else MediaStoreSaver.save(applicationContext, media)
         dir.deleteRecursively()
 
         val current = dao.get(id) ?: return

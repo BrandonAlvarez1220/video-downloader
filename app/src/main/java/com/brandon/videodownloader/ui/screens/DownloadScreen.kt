@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -98,7 +99,7 @@ fun DownloadScreen(vm: MainViewModel, engine: Engine.State) {
 
         EngineBanner(engine)
         UrlInputCard(vm)
-        PreviewSection(vm.analysis, onRetry = vm::retryAnalysis)
+        PreviewSection(vm.analysis, onRetry = vm::retryAnalysis, onLogin = { vm.overlay = MainViewModel.Overlay.Accounts })
 
         AnimatedVisibility(vm.urls.isNotEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -194,7 +195,7 @@ private fun UrlInputCard(vm: MainViewModel) {
 }
 
 @Composable
-fun PreviewSection(analysis: Analysis, onRetry: () -> Unit) {
+fun PreviewSection(analysis: Analysis, onRetry: () -> Unit, onLogin: () -> Unit) {
     AnimatedContent(
         targetState = analysis,
         transitionSpec = { fadeIn() togetherWith fadeOut() },
@@ -215,6 +216,11 @@ fun PreviewSection(analysis: Analysis, onRetry: () -> Unit) {
                     Column(Modifier.weight(1f)) {
                         Text("No se pudo analizar", style = MaterialTheme.typography.titleSmall)
                         Text(a.message, style = MaterialTheme.typography.bodySmall, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                        if (needsLogin(a.message)) {
+                            TextButton(onClick = onLogin, contentPadding = PaddingValues(0.dp)) {
+                                Text("Este video pide iniciar sesión → Iniciar sesión")
+                            }
+                        }
                     }
                     IconButton(onClick = onRetry) { Icon(Icons.Filled.Refresh, "Reintentar") }
                 }
@@ -225,6 +231,13 @@ fun PreviewSection(analysis: Analysis, onRetry: () -> Unit) {
             }
         }
     }
+}
+
+/** Mensajes típicos de yt-dlp cuando el contenido exige cuenta (edad, privado, login). */
+private fun needsLogin(message: String): Boolean {
+    val m = message.lowercase()
+    return listOf("sign in", "login", "log in", "age", "private", "cookies", "members", "inappropriate", "authenticat")
+        .any { it in m }
 }
 
 @Composable
@@ -471,7 +484,10 @@ fun QuickDownloadContent(vm: MainViewModel, engine: Engine.State) {
             Text("Descarga rápida", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
             TextButton(onClick = vm::dismissQuickSheet) { Text("Cerrar") }
         }
-        PreviewSection(vm.analysis, onRetry = vm::retryAnalysis)
+        PreviewSection(vm.analysis, onRetry = vm::retryAnalysis, onLogin = {
+            vm.dismissQuickSheet()
+            vm.overlay = MainViewModel.Overlay.Accounts
+        })
         FormatSelector(vm)
         DownloadButton(vm, engine)
     }
