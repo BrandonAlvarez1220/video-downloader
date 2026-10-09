@@ -216,7 +216,8 @@ internal data class ProgressLine(val percent: Float, val text: String?, val proc
 
         fun parse(percent: Float, eta: Long, line: String, previous: ProgressLine?): ProgressLine {
             if (processingRe.containsMatchIn(line)) return ProgressLine(100f, "Procesando con ffmpeg…", true)
-            if (!line.startsWith("[download]")) return previous ?: ProgressLine(percent, null, false)
+            // La librería reporta -1 mientras aún no conoce el tamaño: lo tratamos como 0.
+            if (!line.startsWith("[download]")) return previous ?: ProgressLine(percent.coerceIn(0f, 100f), null, false)
             val size = sizeRe.find(line)?.groupValues?.get(1)
             val speed = speedRe.find(line)?.groupValues?.get(1)
             val etaText = if (eta > 0) "%d:%02d".format(eta / 60, eta % 60) else null

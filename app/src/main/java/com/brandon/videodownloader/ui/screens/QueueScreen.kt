@@ -170,10 +170,13 @@ private fun DownloadCard(d: Download, vm: MainViewModel, modifier: Modifier = Mo
 
             when (d.status) {
                 Status.DOWNLOADING -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    GradientProgressBar(d.progress / 100f)
+                    // Sin porcentaje real todavía (conectando / tamaño desconocido): barra animada.
+                    val known = d.progress > 0f
+                    if (known) GradientProgressBar(d.progress / 100f) else IndeterminateBar()
                     Row {
                         Text(
-                            "${d.progress.toInt()}%", style = MaterialTheme.typography.labelSmall,
+                            if (known) "${d.progress.toInt()}%" else "Conectando…",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.primary,
                         )
                         Spacer(Modifier.weight(1f))
