@@ -8,6 +8,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -43,11 +44,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.SubcomposeAsyncImage
+import com.brandon.videodownloader.R
 import com.brandon.videodownloader.ui.Platform
 import com.brandon.videodownloader.ui.theme.Brand
 
@@ -278,5 +281,23 @@ fun EmptyState(
             )
             action?.invoke()
         }
+    }
+}
+
+/** Logo de la app (monograma V) sobre su cuadro oscuro, igual que el ícono del launcher. */
+@Composable
+fun AppLogo(size: Dp = 34.dp) {
+    Box(
+        Modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.3f))
+            .background(Color(0xFF101018)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_logo_mark),
+            contentDescription = null,
+            modifier = Modifier.size(size * 0.62f),
+        )
     }
 }

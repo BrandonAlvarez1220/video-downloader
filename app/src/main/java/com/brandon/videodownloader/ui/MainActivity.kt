@@ -58,7 +58,7 @@ import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.brandon.videodownloader.data.Status
-import com.brandon.videodownloader.ui.components.GradientIcon
+import com.brandon.videodownloader.ui.components.AppLogo
 import com.brandon.videodownloader.ui.screens.AccountsScreen
 import com.brandon.videodownloader.ui.screens.DownloadScreen
 import com.brandon.videodownloader.ui.screens.LibraryScreen
@@ -172,7 +172,7 @@ private fun MainScreen(vm: MainViewModel) {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        GradientIcon(Icons.Filled.Download, size = 32.dp, iconSize = 18.dp)
+                        AppLogo(size = 34.dp)
                         Spacer(Modifier.width(10.dp))
                         Text("Video Downloader", style = MaterialTheme.typography.titleLarge)
                     }
