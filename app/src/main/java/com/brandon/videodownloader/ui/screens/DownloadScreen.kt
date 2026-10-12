@@ -90,7 +90,7 @@ fun DownloadScreen(vm: MainViewModel, engine: Engine.State) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Descarga sin anuncios", style = MaterialTheme.typography.headlineMedium)
             Text(
-                "YouTube, TikTok, Instagram, X, Facebook y +1800 sitios.",
+                "YouTube, anime, películas y +1800 sitios.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
