@@ -79,23 +79,40 @@ class Engine(private val context: Context, private val scope: CoroutineScope) {
     /**
      * Analiza una URL SIN descargar. `--flat-playlist` hace que, si es una lista,
      * solo traiga los enlaces de cada video (rápido) en vez de analizarlos todos.
+     *
+     * Si el enlace es de un agregador (animeflv, pelisplus…), primero se resuelve el iframe
+     * del reproductor (ver [SiteResolver]) y se analiza ESA URL con las cabeceras correctas.
      */
     suspend fun probe(url: String): ProbeResult = withContext(Dispatchers.IO) {
         awaitReady()
-        val request = YoutubeDLRequest(url)
+        val resolved = if (SiteResolver.matches(url)) {
+            runCatching { SiteResolver.resolve(url) }.getOrNull()
+        } else null
+        val target = resolved?.mediaUrl ?: url
+
+        val request = YoutubeDLRequest(target)
             .addOption("--dump-single-json")
             .addOption("--flat-playlist")
             .addOption("--no-playlist") // enlace de video dentro de una lista = solo ese video
             .addOption("--no-warnings")
+            .applyResolvedHeaders(resolved?.headers)
         val tmp = File(context.cacheDir, "probe/${System.nanoTime()}")
         Accounts.cookiesCopyFor(context, tmp)?.let { request.addOption("--cookies", it.absolutePath) }
         try {
             val response = YoutubeDL.execute(request, null, null)
-            ProbeResult.parse(JSONObject(response.out), url)
+            val parsed = ProbeResult.parse(JSONObject(response.out), target)
+            // Reetiquetamos: la cola guarda la PÁGINA original (así el worker vuelve a resolver)
+            // y mostramos la insignia del sitio (AnimeFLV / PelisPlus) en vez de la del reproductor.
+            if (resolved != null && parsed is ProbeResult.Video) {
+                parsed.copy(url = url, site = resolved.siteName, title = parsed.title ?: resolved.title)
+            } else {
+                parsed
+            }
         } finally {
             tmp.deleteRecursively()
         }
     }
+
 
     companion object {
         private const val KEY_LAST_UPDATE = "last_update"
