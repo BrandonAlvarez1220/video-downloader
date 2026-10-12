@@ -92,24 +92,45 @@ class Engine(
      */
     suspend fun probe(url: String): ProbeResult = withContext(Dispatchers.IO) {
         awaitReady()
-        val known = if (SiteResolver.matches(url)) {
+        val enabled = settings.fallbackResolve.value
+
+        // Dominios del catálogo: resolvemos ANTES. Si no, primer intento directo con yt-dlp.
+        val known = if (enabled && SiteResolver.matches(url)) {
             runCatching { SiteResolver.resolve(url) }.getOrNull()
         } else null
-        try {
-            runProbe(url, known)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            if (known != null || !settings.fallbackResolve.value) throw e
-            val fallback = runCatching { SiteResolver.tryResolve(url) }.getOrNull() ?: throw e
-            if (fallback.mediaUrl == url) throw e
-            runProbe(url, fallback)
+
+        var lastError: Exception? = null
+        for (candidate in known?.mediaUrls ?: listOf(url)) {
+            try {
+                return@withContext runProbe(url, known, candidate)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                lastError = e // este candidato no sirvió: probamos el siguiente
+            }
         }
+
+        // Plan B general: yt-dlp no reconoció la página ("Unsupported URL"). Leemos el HTML,
+        // sacamos el reproductor y probamos sus candidatos. Sirve para CUALQUIER dominio.
+        if (known == null && enabled) {
+            val fallback = runCatching { SiteResolver.tryResolve(url) }.getOrNull()
+            if (fallback != null) {
+                for (candidate in fallback.mediaUrls) {
+                    try {
+                        return@withContext runProbe(url, fallback, candidate)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        lastError = e
+                    }
+                }
+            }
+        }
+        throw lastError ?: IllegalStateException("No se pudo analizar el enlace")
     }
 
-    /** Analiza `resolved.mediaUrl` (o `pageUrl` si no hubo resolución) y reetiqueta el resultado. */
-    private suspend fun runProbe(pageUrl: String, resolved: SiteResolver.Resolved?): ProbeResult {
-        val target = resolved?.mediaUrl ?: pageUrl
+    /** Analiza un candidato y reetiqueta el resultado con la página original y el nombre del sitio. */
+    private suspend fun runProbe(pageUrl: String, resolved: SiteResolver.Resolved?, target: String): ProbeResult {
         val request = YoutubeDLRequest(target)
             .addOption("--dump-single-json")
             .addOption("--flat-playlist")
@@ -121,10 +142,9 @@ class Engine(
         try {
             val response = YoutubeDL.execute(request, null, null)
             val parsed = ProbeResult.parse(JSONObject(response.out), target)
-            // Reetiquetamos: la cola guarda la PÁGINA original (así el worker vuelve a resolver)
-            // y mostramos la insignia del sitio (AnimeFLV / PelisPlus) en vez de la del reproductor.
+            // La PÁGINA manda para el título: el del reproductor suele ser un hash sin sentido.
             return if (resolved != null && parsed is ProbeResult.Video) {
-                parsed.copy(url = pageUrl, site = resolved.siteName, title = parsed.title ?: resolved.title)
+                parsed.copy(url = pageUrl, site = resolved.siteName, title = resolved.title ?: parsed.title)
             } else {
                 parsed
             }

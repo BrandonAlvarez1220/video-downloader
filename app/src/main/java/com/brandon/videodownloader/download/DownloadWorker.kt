@@ -80,34 +80,52 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         dao.advanceStatus(id, Status.DOWNLOADING)
 
         val dir = workDir(id).apply { mkdirs() }
+        val enabled = app.settings.fallbackResolve.value
 
         // Agregadores conocidos (animeflv, pelisplus…): resolvemos el iframe ANTES de llamar a yt-dlp.
-        var resolved = if (SiteResolver.matches(job.url)) {
+        var resolved = if (enabled && SiteResolver.matches(job.url)) {
             runCatching { SiteResolver.resolve(job.url) }.getOrNull()
         } else null
 
-        try {
-            runYtDlp(id, fallbackTitle, buildRequest(job, dir, resolved?.mediaUrl ?: job.url, resolved?.headers))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            // Plan B GENERAL: yt-dlp no reconoció la página ("Unsupported URL"). Leemos el HTML,
-            // sacamos el iframe del reproductor y reintentamos. Sirve para CUALQUIER dominio.
-            if (resolved != null || !app.settings.fallbackResolve.value) throw e
-            val fallback = runCatching { SiteResolver.tryResolve(job.url) }.getOrNull()
-            if (fallback == null || fallback.mediaUrl == job.url) throw e
-            resolved = fallback
-            dir.deleteRecursively()
-            dir.mkdirs()
-            runYtDlp(id, fallbackTitle, buildRequest(job, dir, fallback.mediaUrl, fallback.headers))
+        var lastError: Exception? = null
+
+        // Prueba los candidatos EN ORDEN hasta que uno funcione (mp4upload sirve, voe/byse no…).
+        suspend fun tryAll(res: SiteResolver.Resolved?, candidates: List<String>): Boolean {
+            for (candidate in candidates) {
+                try {
+                    runYtDlp(id, fallbackTitle, buildRequest(job, dir, candidate, res?.headers))
+                    return true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    lastError = e
+                    dir.deleteRecursively() // limpia restos parciales antes del siguiente intento
+                    dir.mkdirs()
+                }
+            }
+            return false
         }
+
+        var ok = tryAll(resolved, resolved?.mediaUrls ?: listOf(job.url))
+        if (!ok && resolved == null && enabled) {
+            // Plan B GENERAL: yt-dlp no reconoció la página ("Unsupported URL"). Leemos el HTML,
+            // sacamos el reproductor y probamos sus candidatos. Sirve para CUALQUIER dominio.
+            val fallback = runCatching { SiteResolver.tryResolve(job.url) }.getOrNull()
+            if (fallback != null) {
+                resolved = fallback
+                ok = tryAll(fallback, fallback.mediaUrls)
+            }
+        }
+        if (!ok) throw lastError ?: IllegalStateException("No se pudo descargar el video")
 
         // Tras el merge/conversión solo queda el archivo final (+ el .info.json).
         File(dir, "session").deleteRecursively()
-        val media = dir.listFiles()
+        var media = dir.listFiles()
             ?.filter { it.isFile && it.extension !in setOf("json", "part", "ytdl", "jpg", "webp", "png") }
             ?.maxByOrNull { it.length() }
             ?: error("yt-dlp terminó pero no se encontró el archivo descargado")
+        // yt-dlp suele ponerle el hash del reproductor como nombre; usamos el título de la página.
+        resolved?.title?.let { t -> media = media.renamedTo(t) }
         val info = dir.listFiles()?.firstOrNull { it.name.endsWith(".info.json") }
             ?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
 
@@ -122,7 +140,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (current.status == Status.CANCELLED) return
         val done = current.copy(
             status = Status.COMPLETED,
-            title = info?.str("title") ?: current.title ?: resolved?.title ?: media.nameWithoutExtension,
+            title = resolved?.title ?: info?.str("title") ?: current.title ?: media.nameWithoutExtension,
             uploader = info?.str("uploader") ?: info?.str("channel") ?: current.uploader,
             site = info?.str("extractor_key") ?: current.site,
             thumbnail = info?.str("thumbnail") ?: current.thumbnail,
@@ -220,6 +238,20 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
     }
 
     private fun workDir(id: Long) = File(applicationContext.cacheDir, "downloads/$id")
+
+    /** Renombra el archivo final con un título legible, quitando caracteres prohibidos en el sistema. */
+    private fun File.renamedTo(title: String): File {
+        val safe = title
+            .replace(Regex("""[\\/:*?"<>|\n\r\t]+"""), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(120)
+        if (safe.isBlank()) return this
+        val name = if (extension.isBlank()) safe else "$safe.$extension"
+        val dest = File(parentFile, name)
+        if (dest.exists()) return this
+        return if (renameTo(dest)) dest else this
+    }
 
     private fun foregroundInfo(id: Long, title: String, percent: Float?, text: String?): ForegroundInfo =
         ForegroundInfo(

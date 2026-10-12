@@ -20,8 +20,8 @@ import com.yausername.youtubedl_android.YoutubeDLRequest
 object SiteResolver {
 
     data class Resolved(
-        /** URL que se le pasa a yt-dlp. */
-        val mediaUrl: String,
+        /** URLs candidatas en orden de preferencia (la primera es la mejor). */
+        val mediaUrls: List<String>,
         /** Página original que pegó el usuario (es la que se guarda en la cola). */
         val pageUrl: String,
         val title: String?,
@@ -29,7 +29,9 @@ object SiteResolver {
         val siteName: String,
         /** Cabeceras HTTP que yt-dlp debe enviar (Referer, User-Agent…). */
         val headers: Map<String, String>,
-    )
+    ) {
+        val mediaUrl: String get() = mediaUrls.first()
+    }
 
     private const val MAX_DEPTH = 3
 
@@ -43,11 +45,14 @@ object SiteResolver {
     suspend fun resolve(url: String): Resolved = withContext(Dispatchers.IO) {
         val site = Sites.match(url)
         val found = search(url)
-        if (found != null) {
-            Resolved(found.mediaUrl, url, found.title, site?.id ?: hostName(url), site?.name ?: hostName(url), headersFor(found.referer))
-        } else {
-            Resolved(url, url, null, site?.id ?: hostName(url), site?.name ?: hostName(url), headersFor(url))
-        }
+        Resolved(
+            mediaUrls = found?.mediaUrls ?: listOf(url),
+            pageUrl = url,
+            title = found?.title,
+            siteId = site?.id ?: hostName(url),
+            siteName = site?.name ?: hostName(url),
+            headers = headersFor(found?.referer ?: url),
+        )
     }
 
     /**
@@ -57,32 +62,38 @@ object SiteResolver {
     suspend fun tryResolve(url: String): Resolved? = withContext(Dispatchers.IO) {
         val found = search(url) ?: return@withContext null
         val site = Sites.match(url)
-        Resolved(found.mediaUrl, url, found.title, site?.id ?: hostName(url), site?.name ?: hostName(url), headersFor(found.referer))
+        Resolved(found.mediaUrls, url, found.title, site?.id ?: hostName(url), site?.name ?: hostName(url), headersFor(found.referer))
     }
 
-    private data class Found(val mediaUrl: String, val referer: String, val title: String?)
+    private data class Found(val mediaUrls: List<String>, val referer: String, val title: String?)
 
-    /** Lee la página (y los iframes intermedios) y devuelve la mejor URL de video encontrada. */
+    /**
+     * Lee la página (y los iframes intermedios) y devuelve los candidatos ordenados.
+     * Se detiene en cuanto el mejor candidato es algo que yt-dlp sabe manejar o un archivo directo;
+     * si no, sigue un salto más (hasta [MAX_DEPTH]).
+     */
     private fun search(url: String): Found? {
         var current = url
         var referer: String? = null
+        var fallback: Found? = null
         var depth = 0
         while (depth++ < MAX_DEPTH) {
             val resp = Http.get(current, referer = referer)
             val base = resp.finalUrl
-            val best = extractCandidates(resp.body, base).firstOrNull() ?: return null
-
-            // Encontramos el reproductor (o el archivo directo): se lo pasamos a yt-dlp.
-            if (isDirectMedia(best) || Sites.isYtDlpHost(best)) {
-                return Found(best, base, pageTitle(resp.body))
-            }
-
-            // El iframe apuntaba a otra página intermedia: seguimos un salto más.
+            val candidates = extractCandidates(resp.body, base)
+            if (candidates.isEmpty()) return fallback
+            val found = Found(candidates, base, pageTitle(resp.body))
+            // Varios servidores, o un archivo directo: esta es la página "final".
+            if (candidates.size > 1 || isDirectFile(candidates.first())) return found
+            // Un solo candidato que no es archivo directo: probablemente una página intermedia.
+            if (fallback == null) fallback = found
             referer = base
-            current = best
+            current = candidates.first()
         }
-        return null
+        return fallback
     }
+
+    private fun isDirectFile(url: String): Boolean = mediaRe.containsMatchIn(url)
 
     private fun hostName(url: String): String = Sites.hostOf(url) ?: "Web"
 
@@ -175,19 +186,22 @@ object SiteResolver {
     private fun looksLikeMedia(url: String): Boolean {
         if (Sites.isBlocked(url)) return false
         if (imageRe.containsMatchIn(url)) return false
-        if (isDirectMedia(url)) return true
+        if (mediaRe.containsMatchIn(url) || mediaPathRe.containsMatchIn(url)) return true
         if (Sites.isYtDlpHost(url)) return true
         return embedPathRe.containsMatchIn(url)
     }
 
-    private fun isDirectMedia(url: String): Boolean =
-        mediaRe.containsMatchIn(url) || mediaPathRe.containsMatchIn(url)
-
-    /** Menor = mejor: 0 archivo directo, 1 reproductor conocido por yt-dlp, 2 otro. */
+    /**
+     * Menor = mejor. Ojo: yt-dlp ya no trae extractores para la mayoría de estos reproductores,
+     * así que casi todo lo resuelve el extractor GENÉRICO leyendo la página del embed.
+     *  0 = archivo directo con extensión (.mp4/.m3u8/…): lo más fiable.
+     *  1 = página de reproductor (embed): el genérico suele sacar el video de ahí.
+     *  2 = endpoint HLS/DASH sin extensión (`…/m3u8/<hash>`): suele pedir tokens/cookies y falla.
+     */
     private fun rank(url: String): Int = when {
-        isDirectMedia(url) -> 0
-        Sites.isYtDlpHost(url) -> 1
-        else -> 2
+        mediaRe.containsMatchIn(url) -> 0
+        mediaPathRe.containsMatchIn(url) -> 2
+        else -> 1
     }
 
     // ---------------------------------------------------------------------------------------
