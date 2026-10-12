@@ -23,6 +23,9 @@ data class Platform(val name: String, val color: Color) {
             listOf("bandcamp") to Platform("Bandcamp", Color(0xFF1DA0C3)),
             listOf("threads") to Platform("Threads", Color(0xFFB0B0B0)),
             listOf("linkedin") to Platform("LinkedIn", Color(0xFF0A66C2)),
+            // Agregadores de anime/películas (necesitan resolución de iframe: ver SiteResolver)
+            listOf("animeflv") to Platform("AnimeFLV", Color(0xFF1E88E5)),
+            listOf("pelisplus", "cuevana", "repelis", "poseidonhd", "gnula") to Platform("PelisPlus", Color(0xFFE53935)),
         )
         private val web = Platform("Web", Color(0xFF8E8EA8))
 
