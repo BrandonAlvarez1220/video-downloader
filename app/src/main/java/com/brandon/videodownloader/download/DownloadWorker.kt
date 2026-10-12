@@ -9,6 +9,8 @@ import com.brandon.videodownloader.App
 import com.brandon.videodownloader.data.Status
 import com.brandon.videodownloader.engine.Accounts
 import com.brandon.videodownloader.engine.Quality
+import com.brandon.videodownloader.engine.SiteResolver
+import com.brandon.videodownloader.engine.applyResolvedHeaders
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
 import kotlinx.coroutines.CancellationException
@@ -78,7 +80,16 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
         val audioOnly = job.quality == Quality.AUDIO
         val dir = workDir(id).apply { mkdirs() }
-        val request = YoutubeDLRequest(job.url).apply {
+
+        // animeflv / pelisplus y similares: la página embebe el reproductor en un iframe.
+        // Resolvemos la URL real del video (y sus cabeceras) antes de lanzar yt-dlp.
+        val resolved = if (SiteResolver.matches(job.url)) {
+            runCatching { SiteResolver.resolve(job.url) }.getOrNull()
+        } else null
+        val targetUrl = resolved?.mediaUrl ?: job.url
+
+        val request = YoutubeDLRequest(targetUrl).apply {
+            applyResolvedHeaders(resolved?.headers)
             addOption("-f", Quality.formatSelector(job.quality))
             // `.150B` recorta el título a 150 bytes: hay sistemas de archivos con límite de nombre.
             addOption("-o", File(dir, "%(title).150B [%(id)s].%(ext)s").absolutePath)
@@ -162,7 +173,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (current.status == Status.CANCELLED) return
         val done = current.copy(
             status = Status.COMPLETED,
-            title = info?.str("title") ?: current.title ?: media.nameWithoutExtension,
+            title = info?.str("title") ?: current.title ?: resolved?.title ?: media.nameWithoutExtension,
             uploader = info?.str("uploader") ?: info?.str("channel") ?: current.uploader,
             site = info?.str("extractor_key") ?: current.site,
             thumbnail = info?.str("thumbnail") ?: current.thumbnail,
