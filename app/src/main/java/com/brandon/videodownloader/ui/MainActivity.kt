@@ -67,6 +67,7 @@ import com.brandon.videodownloader.ui.screens.PlayerScreen
 import com.brandon.videodownloader.ui.screens.QueueScreen
 import com.brandon.videodownloader.ui.screens.QuickDownloadContent
 import com.brandon.videodownloader.ui.screens.SettingsScreen
+import com.brandon.videodownloader.ui.screens.VaultScreen
 import com.brandon.videodownloader.ui.theme.AppTheme
 
 /**
@@ -135,7 +136,8 @@ private fun Root(vm: MainViewModel) {
         when (overlay) {
             null -> MainScreen(vm)
             MainViewModel.Overlay.Settings -> SettingsScreen(vm, engine, onClose = { vm.overlay = null })
-            is MainViewModel.Overlay.Player -> PlayerScreen(overlay.download, onClose = { vm.overlay = null })
+            is MainViewModel.Overlay.Player -> PlayerScreen(overlay.download, onClose = { vm.overlay = overlay.returnTo })
+            MainViewModel.Overlay.Vault -> VaultScreen(vm, onClose = { vm.overlay = null })
             MainViewModel.Overlay.Accounts -> AccountsScreen(vm, onClose = { vm.overlay = MainViewModel.Overlay.Settings })
         }
     }

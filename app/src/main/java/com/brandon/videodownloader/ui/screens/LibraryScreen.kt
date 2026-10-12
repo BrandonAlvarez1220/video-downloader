@@ -81,25 +81,46 @@ import com.brandon.videodownloader.ui.formatDuration
 import com.brandon.videodownloader.ui.formatResolution
 import java.io.File
 
+/**
+ * Biblioteca normal o Bóveda: es la MISMA pantalla con otra fuente de datos ([vault]).
+ * Reutilizar el componente evita duplicar código; lo que cambia es qué consulta de Room observa.
+ */
 @Composable
-fun LibraryScreen(vm: MainViewModel) {
-    val all by vm.library.collectAsStateWithLifecycle()
+fun LibraryScreen(vm: MainViewModel, vault: Boolean = false) {
+    val all by (if (vault) vm.vault else vm.library).collectAsStateWithLifecycle()
     val context = LocalContext.current
     var toDelete by remember { mutableStateOf<Download?>(null) }
 
     if (all.isEmpty()) {
-        EmptyState(
-            Icons.Filled.VideoLibrary,
-            "Tu biblioteca está vacía",
-            "Lo que descargues aparecerá aquí y en tu galería (Movies/VideoDownloader).",
-            action = { TextButton(onClick = { vm.tab = 0 }) { Text("Descargar mi primer video") } },
-        )
+        if (vault) {
+            EmptyState(
+                Icons.Filled.Lock,
+                "Tu Bóveda está vacía",
+                "Al descargar, activa \"Guardar en la Bóveda\". Lo que guardes aquí no aparece en la galería ni en la biblioteca.",
+            )
+        } else {
+            EmptyState(
+                Icons.Filled.VideoLibrary,
+                "Tu biblioteca está vacía",
+                "Lo que descargues aparecerá aquí y en tu galería (Movies/VideoDownloader).",
+                action = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        TextButton(onClick = { vm.tab = 0 }) { Text("Descargar mi primer video") }
+                        TextButton(onClick = { vm.overlay = MainViewModel.Overlay.Vault }) {
+                            Icon(Icons.Filled.Lock, null, Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Abrir Bóveda")
+                        }
+                    }
+                },
+            )
+        }
         return
     }
 
     val visible = vm.filterLibrary(all)
     val actions = ItemActions(
-        play = { vm.overlay = MainViewModel.Overlay.Player(it) },
+        play = { vm.overlay = MainViewModel.Overlay.Player(it, returnTo = if (vault) MainViewModel.Overlay.Vault else null) },
         openWith = { if (!openExternal(context, it)) vm.toast("No hay una app para abrir este archivo") },
         share = { share(context, it) },
         openSource = { openUrl(context, it.url) },
@@ -113,7 +134,7 @@ fun LibraryScreen(vm: MainViewModel) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { LibraryHeader(vm, all) }
+        item(span = { GridItemSpan(maxLineSpan) }) { LibraryHeader(vm, all, vault) }
         if (visible.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
@@ -134,7 +155,7 @@ fun LibraryScreen(vm: MainViewModel) {
             onDismissRequest = { toDelete = null },
             icon = { Icon(Icons.Filled.Delete, null) },
             title = { Text("¿Eliminar del teléfono?") },
-            text = { Text("\"${d.title ?: d.fileName}\" se borrará de la app y de la galería.") },
+            text = { Text("\"${d.title ?: d.fileName}\" se borrará ${if (vault) "de la Bóveda" else "de la app y de la galería"}.") },
             confirmButton = {
                 TextButton(onClick = { vm.deleteFromLibrary(d); toDelete = null }) {
                     Text("Eliminar", color = MaterialTheme.colorScheme.error)
@@ -154,16 +175,21 @@ private class ItemActions(
 )
 
 @Composable
-private fun LibraryHeader(vm: MainViewModel, all: List<Download>) {
+private fun LibraryHeader(vm: MainViewModel, all: List<Download>, vault: Boolean) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Biblioteca", style = MaterialTheme.typography.headlineMedium)
+                Text(if (vault) "Bóveda" else "Biblioteca", style = MaterialTheme.typography.headlineMedium)
                 Text(
                     "${all.size} archivos · ${formatBytes(all.sumOf { it.fileSize ?: 0 })}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+            if (!vault) {
+                IconButton(onClick = { vm.overlay = MainViewModel.Overlay.Vault }) {
+                    Icon(Icons.Filled.Lock, "Abrir Bóveda")
+                }
             }
             SortMenu(vm)
             IconButton(onClick = { vm.libraryGrid = !vm.libraryGrid }) {
@@ -196,9 +222,6 @@ private fun LibraryHeader(vm: MainViewModel, all: List<Download>) {
             item { Chip("Todo", vm.libraryFilter == LibraryFilter.ALL && vm.librarySite == null) { vm.libraryFilter = LibraryFilter.ALL; vm.librarySite = null } }
             item { Chip("Videos", vm.libraryFilter == LibraryFilter.VIDEO) { vm.libraryFilter = LibraryFilter.VIDEO } }
             item { Chip("Audio", vm.libraryFilter == LibraryFilter.AUDIO) { vm.libraryFilter = LibraryFilter.AUDIO } }
-            if (all.any { it.isPrivate }) {
-                item { Chip("Privados", vm.libraryFilter == LibraryFilter.PRIVATE) { vm.libraryFilter = LibraryFilter.PRIVATE } }
-            }
             items(sites) { site ->
                 val p = Platform.fromSite(site, "")
                 Chip(p.name, vm.librarySite == site, dot = p.color) {
@@ -254,7 +277,6 @@ private fun GridItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             Thumbnail(d.thumbnail, Modifier.fillMaxSize(), isAudio)
             PlayBadge(Modifier.align(Alignment.Center))
             PlatformBadge(Platform.fromSite(d.site, d.url), Modifier.align(Alignment.TopStart).padding(6.dp))
-            if (d.isPrivate) PrivateBadge(Modifier.align(Alignment.TopEnd).padding(6.dp))
             formatDuration(d.durationSec).takeIf { it.isNotEmpty() }?.let {
                 OverlayLabel(it, Modifier.align(Alignment.BottomEnd).padding(6.dp))
             }
@@ -286,7 +308,6 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
         Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(width = 128.dp, height = 72.dp).clip(MaterialTheme.shapes.small)) {
                 Thumbnail(d.thumbnail, Modifier.fillMaxSize(), isAudio)
-                if (d.isPrivate) PrivateBadge(Modifier.align(Alignment.TopEnd).padding(4.dp))
                 formatDuration(d.durationSec).takeIf { it.isNotEmpty() }?.let {
                     OverlayLabel(it, Modifier.align(Alignment.BottomEnd).padding(4.dp))
                 }
@@ -307,17 +328,6 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             ItemMenu(d, actions)
         }
     }
-}
-
-private val Download.isPrivate get() = fileUri?.startsWith("file:") == true
-
-/** Candado: el archivo está en la bóveda privada (no aparece en la galería). */
-@Composable
-private fun PrivateBadge(modifier: Modifier = Modifier) {
-    Box(
-        modifier.size(24.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.62f)),
-        contentAlignment = Alignment.Center,
-    ) { Icon(Icons.Filled.Lock, "Privado", tint = Color.White, modifier = Modifier.size(14.dp)) }
 }
 
 @Composable

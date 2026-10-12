@@ -46,17 +46,20 @@
 - Las descargas siguen aunque cierres la app, con su notificación de progreso.
 
 **Biblioteca**
-- Cuadrícula o lista, búsqueda, filtros por tipo (video, audio, privados) y por sitio, y orden.
+- Cuadrícula o lista, búsqueda, filtros por tipo (video, audio) y por sitio, y orden.
 - **Reproductor integrado** a pantalla completa. También puedes abrir con otra app o compartir.
 - Los archivos van a la galería: `Movies/VideoDownloader` (video) y `Music/VideoDownloader` (audio).
 
 **Privacidad**
 - **Cuentas y sesiones**: inicias sesión en un navegador dentro de la app (YouTube, Instagram,
-  Facebook, X, TikTok, Reddit o cualquier otro sitio) para bajar contenido +18, privado o de
+  Facebook, X, TikTok, Reddit o cualquier otro sitio) para descargar contenido con restricción de edad, privado o de
   suscriptores. La sesión se guarda solo en el teléfono; la app nunca ve tu contraseña.
-- **Modo privado**: lo descargado se guarda en una bóveda interna de la app (🔒), no en la galería.
-- **Bloqueo con huella**: pide huella, rostro o PIN del teléfono al abrir la app (o al volver tras
-  30 s fuera). Con el bloqueo activo, la app se ve en negro en "Recientes" y no permite capturas.
+- **Bóveda 🔒**: una biblioteca aparte, protegida con huella, rostro o PIN. Al descargar eliges
+  "Guardar en la Bóveda" y ese video se guarda en el almacenamiento interno de la app: no aparece en la
+  galería, ni en la biblioteca normal, ni con su título en la cola o las notificaciones. Pide huella cada
+  vez que entras y se cierra sola al salir de la app.
+- **Bloqueo con huella**: pide huella, rostro o PIN del teléfono cada vez que abres o regresas a la app.
+  Con el bloqueo activo, la app se ve en negro en "Recientes" y no permite capturas.
 
 **Ajustes**
 - Calidad predeterminada, descargas simultáneas, solo Wi-Fi, metadatos y tema claro/oscuro/sistema.
@@ -73,7 +76,7 @@
 | Streams "en trozos" | `.m3u8` (HLS) y `.mpd` (DASH): noticias, cursos, TV en línea | ✅ |
 | Páginas con un reproductor incrustado | Blogs y sitios con `<video>`, JW Player, etc. | ✅ casi siempre |
 | Sitios para adultos | La mayoría de los populares, sin cuenta | ✅ |
-| Contenido con login | YouTube +18, videos privados, Instagram/Facebook privados, Vimeo, sitios premium | ✅ inicia sesión en Ajustes → *Cuentas y sesiones* |
+| Contenido con login | Videos de YouTube con restricción de edad, videos privados, Instagram/Facebook privados, Vimeo, sitios premium | ✅ inicia sesión en Ajustes → *Cuentas y sesiones* |
 | Plataformas con DRM | Netflix, Prime Video, Disney+, HBO Max, Spotify, Apple Music | ❌ cifrado; ninguna herramienta legal lo descarga |
 
 Si un sitio que antes funcionaba empieza a fallar, casi siempre se arregla con

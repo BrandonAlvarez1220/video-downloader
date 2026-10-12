@@ -25,7 +25,7 @@ class DownloadController(
 
     private val workManager get() = WorkManager.getInstance(context)
 
-    suspend fun enqueue(video: ProbeResult.Video, quality: String): Long {
+    suspend fun enqueue(video: ProbeResult.Video, quality: String, vault: Boolean = false): Long {
         val id = dao.insert(
             Download(
                 url = video.url,
@@ -35,6 +35,7 @@ class DownloadController(
                 site = video.site,
                 thumbnail = video.thumbnail,
                 durationSec = video.durationSec,
+                vault = vault,
             )
         )
         schedule(id)
@@ -42,8 +43,8 @@ class DownloadController(
     }
 
     /** Sin análisis previo (p. ej. si analizar falló): el worker mostrará el error real. */
-    suspend fun enqueueUrl(url: String, quality: String): Long {
-        val id = dao.insert(Download(url = url, quality = quality))
+    suspend fun enqueueUrl(url: String, quality: String, vault: Boolean = false): Long {
+        val id = dao.insert(Download(url = url, quality = quality, vault = vault))
         schedule(id)
         return id
     }

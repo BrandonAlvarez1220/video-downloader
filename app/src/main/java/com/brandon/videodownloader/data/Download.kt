@@ -1,5 +1,6 @@
 package com.brandon.videodownloader.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -33,6 +34,9 @@ data class Download(
     val fileName: String? = null,
     val fileSize: Long? = null,
     val mimeType: String? = null,
+    /** true = va a la Bóveda: almacenamiento interno, protegida con huella/PIN, fuera de la galería. */
+    @ColumnInfo(defaultValue = "0") // igual que en la migración, para que Room valide el esquema
+    val vault: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val finishedAt: Long? = null,
 )

@@ -121,16 +121,26 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
             Group {
                 SettingRow(
                     Icons.Filled.AccountCircle, "Cuentas y sesiones",
-                    "Inicia sesión para videos +18, privados o de suscriptores",
+                    "Para videos con restricción de edad, privados o exclusivos de suscriptores",
                     onClick = { vm.overlay = MainViewModel.Overlay.Accounts },
                 ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
                 SettingRow(
-                    Icons.Filled.Lock, "Modo privado",
-                    "Lo nuevo se guarda en una bóveda dentro de la app: no aparece en la galería",
-                ) { Switch(privateMode, onCheckedChange = s::setPrivateMode) }
+                    Icons.Filled.Lock, "Abrir Bóveda",
+                    "Tus descargas privadas, protegidas con huella o PIN",
+                    onClick = { vm.overlay = MainViewModel.Overlay.Vault },
+                ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
+                SettingRow(
+                    Icons.Filled.Lock, "Guardar en la Bóveda por defecto",
+                    "Marca la opción \"Guardar en la Bóveda\" al descargar. Puedes cambiarla en cada descarga",
+                ) {
+                    Switch(privateMode, onCheckedChange = {
+                        s.setPrivateMode(it)
+                        vm.saveToVault = it
+                    })
+                }
                 SettingRow(
                     Icons.Filled.Fingerprint, "Bloqueo con huella",
-                    "Pide huella, rostro o PIN al abrir la app y la oculta en Recientes",
+                    "Pide huella, rostro o PIN cada vez que abres la app y la oculta en Recientes",
                 ) {
                     Switch(appLock, onCheckedChange = { enable ->
                         val activity = context as? FragmentActivity

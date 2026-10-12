@@ -41,11 +41,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /** Pantallas que se abren encima de las pestañas. */
     sealed interface Overlay {
         data object Settings : Overlay
-        data class Player(val download: Download) : Overlay
+        /** [returnTo]: a dónde volver al cerrar el reproductor (p. ej. a la Bóveda). */
+        data class Player(val download: Download, val returnTo: Overlay? = null) : Overlay
         data object Accounts : Overlay
+        data object Vault : Overlay
     }
 
-    enum class LibraryFilter { ALL, VIDEO, AUDIO, PRIVATE }
+    enum class LibraryFilter { ALL, VIDEO, AUDIO }
     enum class LibrarySort(val label: String) { RECENT("Recientes"), NAME("Nombre"), SIZE("Tamaño") }
 
     // ---- navegación ----
@@ -80,6 +82,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val library: StateFlow<List<Download>> = app.database.downloads().observeLibrary()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val vault: StateFlow<List<Download>> = app.database.downloads().observeVault()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Mensajes de una sola vez (snackbar). Channel = se consumen una vez, no se repiten al rotar. */
     private val _messages = Channel<String>(Channel.BUFFERED)
@@ -87,6 +91,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val urls: List<String> get() = extractUrls(input)
     val isAudio: Boolean get() = quality == Quality.AUDIO
+
+    /** Destino de la próxima descarga. Empieza con lo que elegiste en Ajustes, y lo cambias por descarga. */
+    var saveToVault by mutableStateOf(settings.privateMode.value)
 
     private var analyzeJob: Job? = null
 
@@ -153,6 +160,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val list = urls
         if (list.isEmpty() || busyMessage != null) return
         val q = quality
+        val vault = saveToVault
         viewModelScope.launch {
             var added = 0
             list.forEachIndexed { i, url ->
@@ -161,17 +169,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val known = (analysis as? Analysis.Done)?.takeIf { it.url == url }?.result
                 val result = known ?: runCatching { app.engine.probe(url) }.getOrNull()
                 when (result) {
-                    is ProbeResult.Video -> { controller.enqueue(result, q); added++ }
-                    is ProbeResult.Playlist -> result.entries.forEach { controller.enqueue(it, q); added++ }
+                    is ProbeResult.Video -> { controller.enqueue(result, q, vault); added++ }
+                    is ProbeResult.Playlist -> result.entries.forEach { controller.enqueue(it, q, vault); added++ }
                     // Si el análisis falló, igual se encola: el worker mostrará el error real en la Cola.
-                    null -> { controller.enqueueUrl(url, q); added++ }
+                    null -> { controller.enqueueUrl(url, q, vault); added++ }
                 }
             }
             busyMessage = null
             input = ""
             analysis = Analysis.Idle
             quickSheet = false
-            _messages.send(if (added == 1) "Descarga agregada a la cola" else "$added descargas agregadas a la cola")
+            val where = if (vault) " (Bóveda)" else ""
+            _messages.send(if (added == 1) "Descarga agregada a la cola$where" else "$added descargas agregadas a la cola$where")
             tab = 1
         }
     }
@@ -210,7 +219,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     LibraryFilter.ALL -> true
                     LibraryFilter.AUDIO -> it.mimeType?.startsWith("audio/") == true
                     LibraryFilter.VIDEO -> it.mimeType?.startsWith("audio/") != true
-                    LibraryFilter.PRIVATE -> it.fileUri?.startsWith("file:") == true
                 }
             }
             .filter { librarySite == null || it.site == librarySite }

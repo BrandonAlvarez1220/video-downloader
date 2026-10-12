@@ -1,7 +1,6 @@
 package com.brandon.videodownloader.ui
 
 import android.content.Context
-import android.os.SystemClock
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricManager.Authenticators.BIOMETRIC_WEAK
 import androidx.biometric.BiometricManager.Authenticators.DEVICE_CREDENTIAL
@@ -13,7 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 
 /**
- * Bloqueo de la app con huella / rostro / PIN del teléfono.
+ * Bloqueo con huella / rostro / PIN del teléfono, para la app completa y para la Bóveda.
  *
  * Por qué no guardamos un PIN propio: BiometricPrompt delega en el sistema. La huella nunca
  * llega a la app (vive en un chip seguro del teléfono); Android solo nos responde "sí, es el dueño".
@@ -22,13 +21,23 @@ import androidx.fragment.app.FragmentActivity
  * Es un `object` (singleton del proceso) para que el estado sobreviva a rotaciones de pantalla.
  */
 object AppLock {
-    /** Si pasas menos de esto fuera de la app (p. ej. contestar un mensaje), no vuelve a pedir huella. */
-    private const val GRACE_MS = 30_000L
-
-    // Al arrancar el proceso empieza bloqueada; si el bloqueo está apagado se libera en onForeground.
+    /** App completa bloqueada. Empieza en true: al abrir la app (proceso nuevo) siempre pide huella. */
     var locked by mutableStateOf(true)
         private set
-    private var backgroundAt = 0L
+
+    /** La Bóveda está abierta. Se cierra sola en cuanto sales de la app. */
+    var vaultUnlocked by mutableStateOf(false)
+        private set
+
+    /** Hubo un salto a segundo plano desde la última vez que se vio la app. */
+    private var wentToBackground = false
+
+    /**
+     * Mientras el diálogo de huella/PIN está abierto. Por qué importa: si eliges "usar PIN",
+     * Android abre OTRA pantalla y nuestra app pasa a segundo plano; sin esta bandera, al volver
+     * creería que saliste y volvería a pedir la huella (bucle infinito).
+     */
+    private var authInProgress = false
 
     /** Huella/rostro débil o fuerte, o en su defecto PIN/patrón/contraseña del teléfono. */
     private const val AUTHENTICATORS = BIOMETRIC_WEAK or DEVICE_CREDENTIAL
@@ -37,29 +46,50 @@ object AppLock {
         BiometricManager.from(context).canAuthenticate(AUTHENTICATORS) == BiometricManager.BIOMETRIC_SUCCESS
 
     fun onBackground() {
-        backgroundAt = SystemClock.elapsedRealtime()
+        if (authInProgress) return
+        wentToBackground = true
+        vaultUnlocked = false
     }
 
     fun onForeground(context: Context, enabled: Boolean) {
         // Si quitaste la huella/PIN del teléfono no te dejamos fuera de tu propia app.
         if (!enabled || !canAuthenticate(context)) {
             locked = false
-            return
+        } else if (wentToBackground) {
+            // Sin periodo de gracia: cada vez que vuelves (otra app, pantalla apagada, etc.) pide huella.
+            locked = true
         }
-        if (backgroundAt != 0L && SystemClock.elapsedRealtime() - backgroundAt > GRACE_MS) locked = true
+        wentToBackground = false
     }
 
     fun unlock(activity: FragmentActivity) {
         authenticate(activity, "Desbloquear Video Downloader") { locked = false }
     }
 
+    fun unlockVault(activity: FragmentActivity) {
+        authenticate(activity, "Abrir la Bóveda") { vaultUnlocked = true }
+    }
+
+    fun lockVault() {
+        vaultUnlocked = false
+    }
+
     /** Muestra el diálogo del sistema y llama a [onSuccess] solo si te identificas. */
     fun authenticate(activity: FragmentActivity, title: String, onSuccess: () -> Unit) {
+        authInProgress = true
         val prompt = BiometricPrompt(
             activity,
             ContextCompat.getMainExecutor(activity),
             object : BiometricPrompt.AuthenticationCallback() {
-                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onSuccess()
+                override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                    authInProgress = false
+                    onSuccess()
+                }
+
+                // Cancelado, demasiados intentos, etc. (un dedo no reconocido NO llega aquí: deja reintentar).
+                override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                    authInProgress = false
+                }
             },
         )
         val info = BiometricPrompt.PromptInfo.Builder()

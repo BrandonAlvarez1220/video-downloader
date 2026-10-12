@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Downloading
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
@@ -134,20 +135,29 @@ private fun DownloadCard(d: Download, vm: MainViewModel, modifier: Modifier = Mo
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box {
+                    // Bóveda: ni miniatura ni sitio; solo un candado (alguien podría ver tu pantalla).
                     Thumbnail(
-                        d.thumbnail,
+                        if (d.vault) null else d.thumbnail,
                         Modifier.size(width = 112.dp, height = 63.dp).clip(MaterialTheme.shapes.small),
                         isAudio = d.quality == Quality.AUDIO,
                     )
-                    PlatformBadge(
-                        Platform.fromSite(d.site, d.url),
-                        Modifier.align(Alignment.BottomStart).padding(4.dp),
-                    )
+                    if (d.vault) {
+                        Icon(
+                            Icons.Filled.Lock, "Bóveda",
+                            Modifier.align(Alignment.Center).size(22.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    } else {
+                        PlatformBadge(
+                            Platform.fromSite(d.site, d.url),
+                            Modifier.align(Alignment.BottomStart).padding(4.dp),
+                        )
+                    }
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        d.title ?: d.url, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        if (d.vault) "Descarga privada" else d.title ?: d.url, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {

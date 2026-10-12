@@ -26,8 +26,12 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE status != 'COMPLETED' ORDER BY id DESC")
     fun observeQueue(): Flow<List<Download>>
 
-    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' ORDER BY finishedAt DESC")
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND vault = 0 ORDER BY finishedAt DESC")
     fun observeLibrary(): Flow<List<Download>>
+
+    /** La Bóveda: mismos datos, pero solo lo marcado como privado. Nunca se mezcla con la biblioteca. */
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED' AND vault = 1 ORDER BY finishedAt DESC")
+    fun observeVault(): Flow<List<Download>>
 
     @Query("UPDATE downloads SET status = :status, error = :error, finishedAt = :finishedAt WHERE id = :id")
     suspend fun setStatus(id: Long, status: Status, error: String? = null, finishedAt: Long? = null)

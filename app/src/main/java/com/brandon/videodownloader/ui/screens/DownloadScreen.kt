@@ -47,6 +47,8 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -380,6 +382,35 @@ fun FormatSelector(vm: MainViewModel) {
                     )
                 }
             }
+        }
+
+        VaultToggle(checked = vm.saveToVault, onChange = { vm.saveToVault = it })
+    }
+}
+
+/** Elegir por descarga si va a la galería normal o a la Bóveda (protegida con huella/PIN). */
+@Composable
+private fun VaultToggle(checked: Boolean, onChange: (Boolean) -> Unit) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        color = if (checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.medium)
+            .clickable { onChange(!checked) },
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Lock, null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Guardar en la Bóveda", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "Protegida con tu huella o PIN y fuera de la galería",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = checked, onCheckedChange = onChange)
         }
     }
 }

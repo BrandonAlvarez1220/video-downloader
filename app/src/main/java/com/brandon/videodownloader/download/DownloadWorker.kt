@@ -47,7 +47,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val job = dao.get(id) ?: return Result.success()
         if (!job.status.isActive) return Result.success() // cancelada o ya terminada
 
-        val title = job.title ?: job.url
+        // En la Bóveda, ni la notificación revela qué se está bajando.
+        val title = if (job.vault) PRIVATE_TITLE else job.title ?: job.url
         return try {
             // Si la app está en segundo plano, Android 12+ puede negarlo; la descarga sigue igual.
             runCatching { setForeground(foregroundInfo(id, title, null, "En cola")) }
@@ -130,8 +131,8 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             ?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
 
         dao.advanceStatus(id, Status.PROCESSING)
-        val private = app.settings.privateMode.value
-        dao.setProgress(id, 100f, if (private) "Guardando en la bóveda privada…" else "Guardando en la galería…")
+        val private = job.vault
+        dao.setProgress(id, 100f, if (private) "Guardando en la Bóveda…" else "Guardando en la galería…")
         val saved = if (private) MediaStoreSaver.savePrivate(applicationContext, media)
         else MediaStoreSaver.save(applicationContext, media)
         dir.deleteRecursively()
@@ -157,7 +158,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             finishedAt = System.currentTimeMillis(),
         )
         dao.update(done)
-        Notifications.finished(applicationContext, id, done.title ?: fallbackTitle, ok = true)
+        Notifications.finished(applicationContext, id, if (job.vault) PRIVATE_TITLE else done.title ?: fallbackTitle, ok = true)
     }
 
     /** Arma el request de yt-dlp para una URL concreta (la real, ya resuelta, o la del usuario). */
@@ -185,7 +186,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             } else {
                 addOption("--merge-output-format", "mp4") // MP4 = se reproduce en cualquier lado
             }
-            // Sesión iniciada en "Cuentas": contenido +18, privado o de suscriptores.
+            // Sesión iniciada en "Cuentas": contenido con restricción de edad, privado o de suscriptores.
             Accounts.cookiesCopyFor(applicationContext, File(dir, "session"))
                 ?.let { addOption("--cookies", it.absolutePath) }
             if (app.settings.sponsorBlock.value) {
@@ -272,6 +273,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
     companion object {
         const val KEY_ID = "download_id"
+        private const val PRIVATE_TITLE = "Descarga privada"
     }
 }
 
