@@ -23,7 +23,8 @@ object Sites {
     )
 
     val all = listOf(
-        Aggregator("animeflv", "AnimeFLV", listOf("animeflv.net", "animeflv.com"), Kind.ANIME),
+        // "animeflv" a secas cubre animeflv.net, animeflv.or.at, www3.animeflv.net y demás clones.
+        Aggregator("animeflv", "AnimeFLV", listOf("animeflv"), Kind.ANIME),
         Aggregator("pelisplus", "PelisPlus", listOf("pelisplus"), Kind.PELIS),
         Aggregator("cuevana", "Cuevana", listOf("cuevana"), Kind.PELIS),
         Aggregator("repelis", "RePelis", listOf("repelis", "pelis24", "poseidonhd"), Kind.PELIS),

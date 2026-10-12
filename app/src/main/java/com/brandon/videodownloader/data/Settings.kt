@@ -29,6 +29,13 @@ class Settings(context: Context) {
     private val _embedMetadata = MutableStateFlow(prefs.getBoolean(K_METADATA, true))
     val embedMetadata: StateFlow<Boolean> = _embedMetadata.asStateFlow()
 
+    /**
+     * Plan B: si yt-dlp no reconoce un enlace ("Unsupported URL"), leer la página y sacar la URL
+     * del reproductor incrustado (animeflv, pelisplus y similares). Ver `SiteResolver`.
+     */
+    private val _fallbackResolve = MutableStateFlow(prefs.getBoolean(K_FALLBACK, true))
+    val fallbackResolve: StateFlow<Boolean> = _fallbackResolve.asStateFlow()
+
     private val _privateMode = MutableStateFlow(prefs.getBoolean(K_PRIVATE, false))
     val privateMode: StateFlow<Boolean> = _privateMode.asStateFlow()
 
@@ -45,6 +52,7 @@ class Settings(context: Context) {
     fun setWifiOnly(v: Boolean) { _wifiOnly.value = v; prefs.edit().putBoolean(K_WIFI, v).apply() }
     fun setSponsorBlock(v: Boolean) { _sponsorBlock.value = v; prefs.edit().putBoolean(K_SPONSOR, v).apply() }
     fun setEmbedMetadata(v: Boolean) { _embedMetadata.value = v; prefs.edit().putBoolean(K_METADATA, v).apply() }
+    fun setFallbackResolve(v: Boolean) { _fallbackResolve.value = v; prefs.edit().putBoolean(K_FALLBACK, v).apply() }
     fun setPrivateMode(v: Boolean) { _privateMode.value = v; prefs.edit().putBoolean(K_PRIVATE, v).apply() }
     fun setAppLock(v: Boolean) { _appLock.value = v; prefs.edit().putBoolean(K_LOCK, v).apply() }
     fun setTheme(v: ThemeMode) { _theme.value = v; prefs.edit().putString(K_THEME, v.name).apply() }
@@ -55,6 +63,7 @@ class Settings(context: Context) {
         const val K_WIFI = "wifi_only"
         const val K_SPONSOR = "sponsorblock"
         const val K_METADATA = "embed_metadata"
+        const val K_FALLBACK = "fallback_resolve"
         const val K_THEME = "theme"
         const val K_PRIVATE = "private_mode"
         const val K_LOCK = "app_lock"

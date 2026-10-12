@@ -1,9 +1,11 @@
 package com.brandon.videodownloader.engine
 
 import android.content.Context
+import com.brandon.videodownloader.data.Settings
 import com.yausername.ffmpeg.FFmpeg
 import com.yausername.youtubedl_android.YoutubeDL
 import com.yausername.youtubedl_android.YoutubeDLRequest
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +25,11 @@ import java.io.File
  * `python yt-dlp <args>` como un PROCESO dentro del teléfono, igual que harías en una terminal.
  * Leemos su salida (stdout) para saber el progreso.
  */
-class Engine(private val context: Context, private val scope: CoroutineScope) {
+class Engine(
+    private val context: Context,
+    private val scope: CoroutineScope,
+    private val settings: Settings,
+) {
 
     sealed interface State {
         data object Initializing : State
@@ -81,15 +87,29 @@ class Engine(private val context: Context, private val scope: CoroutineScope) {
      * solo traiga los enlaces de cada video (rápido) en vez de analizarlos todos.
      *
      * Si el enlace es de un agregador (animeflv, pelisplus…), primero se resuelve el iframe
-     * del reproductor (ver [SiteResolver]) y se analiza ESA URL con las cabeceras correctas.
+     * del reproductor (ver [SiteResolver]). Si yt-dlp NO reconoce la página ("Unsupported URL"),
+     * se intenta el plan B general: leer el HTML y sacar el iframe, sea el dominio que sea.
      */
     suspend fun probe(url: String): ProbeResult = withContext(Dispatchers.IO) {
         awaitReady()
-        val resolved = if (SiteResolver.matches(url)) {
+        val known = if (SiteResolver.matches(url)) {
             runCatching { SiteResolver.resolve(url) }.getOrNull()
         } else null
-        val target = resolved?.mediaUrl ?: url
+        try {
+            runProbe(url, known)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (known != null || !settings.fallbackResolve.value) throw e
+            val fallback = runCatching { SiteResolver.tryResolve(url) }.getOrNull() ?: throw e
+            if (fallback.mediaUrl == url) throw e
+            runProbe(url, fallback)
+        }
+    }
 
+    /** Analiza `resolved.mediaUrl` (o `pageUrl` si no hubo resolución) y reetiqueta el resultado. */
+    private suspend fun runProbe(pageUrl: String, resolved: SiteResolver.Resolved?): ProbeResult {
+        val target = resolved?.mediaUrl ?: pageUrl
         val request = YoutubeDLRequest(target)
             .addOption("--dump-single-json")
             .addOption("--flat-playlist")
@@ -103,8 +123,8 @@ class Engine(private val context: Context, private val scope: CoroutineScope) {
             val parsed = ProbeResult.parse(JSONObject(response.out), target)
             // Reetiquetamos: la cola guarda la PÁGINA original (así el worker vuelve a resolver)
             // y mostramos la insignia del sitio (AnimeFLV / PelisPlus) en vez de la del reproductor.
-            if (resolved != null && parsed is ProbeResult.Video) {
-                parsed.copy(url = url, site = resolved.siteName, title = parsed.title ?: resolved.title)
+            return if (resolved != null && parsed is ProbeResult.Video) {
+                parsed.copy(url = pageUrl, site = resolved.siteName, title = parsed.title ?: resolved.title)
             } else {
                 parsed
             }

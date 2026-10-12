@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.HighQuality
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Label
@@ -84,6 +85,7 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
     val theme by s.theme.collectAsStateWithLifecycle()
     val privateMode by s.privateMode.collectAsStateWithLifecycle()
     val appLock by s.appLock.collectAsStateWithLifecycle()
+    val fallbackResolve by s.fallbackResolve.collectAsStateWithLifecycle()
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         TopAppBar(
@@ -156,6 +158,10 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
                     Icons.Filled.Label, "Metadatos y carátula",
                     "Guarda título, autor y portada dentro del archivo",
                 ) { Switch(metadata, onCheckedChange = s::setEmbedMetadata) }
+                SettingRow(
+                    Icons.Filled.Extension, "Reproductores incrustados",
+                    "Si un enlace falla, la app lee la página y saca el reproductor (anime, pelis y similares)",
+                ) { Switch(fallbackResolve, onCheckedChange = s::setFallbackResolve) }
             }
 
             SectionHeader("Apariencia", Modifier.padding(top = 8.dp))

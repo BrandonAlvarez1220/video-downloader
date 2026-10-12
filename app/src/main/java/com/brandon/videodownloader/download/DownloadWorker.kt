@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.ForegroundInfo
 import androidx.work.WorkerParameters
 import com.brandon.videodownloader.App
+import com.brandon.videodownloader.data.Download
 import com.brandon.videodownloader.data.Status
 import com.brandon.videodownloader.engine.Accounts
 import com.brandon.videodownloader.engine.Quality
@@ -78,79 +79,27 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (!job.status.isActive) return
         dao.advanceStatus(id, Status.DOWNLOADING)
 
-        val audioOnly = job.quality == Quality.AUDIO
         val dir = workDir(id).apply { mkdirs() }
 
-        // animeflv / pelisplus y similares: la página embebe el reproductor en un iframe.
-        // Resolvemos la URL real del video (y sus cabeceras) antes de lanzar yt-dlp.
-        val resolved = if (SiteResolver.matches(job.url)) {
+        // Agregadores conocidos (animeflv, pelisplus…): resolvemos el iframe ANTES de llamar a yt-dlp.
+        var resolved = if (SiteResolver.matches(job.url)) {
             runCatching { SiteResolver.resolve(job.url) }.getOrNull()
         } else null
-        val targetUrl = resolved?.mediaUrl ?: job.url
 
-        val request = YoutubeDLRequest(targetUrl).apply {
-            applyResolvedHeaders(resolved?.headers)
-            addOption("-f", Quality.formatSelector(job.quality))
-            // `.150B` recorta el título a 150 bytes: hay sistemas de archivos con límite de nombre.
-            addOption("-o", File(dir, "%(title).150B [%(id)s].%(ext)s").absolutePath)
-            addOption("--no-playlist")
-            addOption("--write-info-json") // metadatos (título, resolución…) en un .json al lado
-            addOption("--no-mtime")
-            addOption("--retries", 5)
-            addOption("--concurrent-fragments", 4) // acelera videos en trozos (HLS/DASH)
-            if (audioOnly) {
-                addOption("-x")
-                addOption("--audio-format", "mp3")
-                addOption("--audio-quality", "192K")
-            } else {
-                addOption("--merge-output-format", "mp4") // MP4 = se reproduce en cualquier lado
-            }
-            // Sesión iniciada en "Cuentas": contenido +18, privado o de suscriptores.
-            Accounts.cookiesCopyFor(applicationContext, File(dir, "session"))
-                ?.let { addOption("--cookies", it.absolutePath) }
-            if (app.settings.sponsorBlock.value) {
-                // SponsorBlock: base de datos colaborativa que marca los segmentos de patrocinio
-                // DENTRO de los videos de YouTube. ffmpeg los recorta del archivo final.
-                addOption("--sponsorblock-remove", "sponsor,selfpromo,interaction")
-            }
-            if (app.settings.embedMetadata.value) {
-                addOption("--embed-metadata") // título, artista, fecha dentro del archivo
-                if (audioOnly) {
-                    addOption("--embed-thumbnail") // carátula en el MP3
-                    addOption("--convert-thumbnails", "jpg")
-                }
-            }
-        }
-
-        // El callback llega desde el hilo que lee la salida de yt-dlp, muchas veces por segundo.
-        // Solo guardamos el último valor y otra corrutina lo escribe en la BD cada 500 ms
-        // (escribir en cada línea saturaría SQLite y la UI sin aportar nada).
-        val latest = AtomicReference<ProgressLine?>(null)
-        coroutineScope {
-            val reporter = launch {
-                var processingMarked = false
-                while (isActive) {
-                    delay(500)
-                    val p = latest.get() ?: continue
-                    if (p.processing && !processingMarked) {
-                        dao.advanceStatus(id, Status.PROCESSING)
-                        processingMarked = true
-                    }
-                    dao.setProgress(id, p.percent, p.text)
-                    runCatching { setForeground(foregroundInfo(id, fallbackTitle, p.percent, p.text)) }
-                }
-            }
-            try {
-                // runInterruptible: si cancelan la corrutina, interrumpe el hilo bloqueado
-                // y la librería mata el proceso de Python.
-                runInterruptible(Dispatchers.IO) {
-                    YoutubeDL.execute(request, id.toString(), false) { percent, eta, line ->
-                        latest.set(ProgressLine.parse(percent, eta, line, latest.get()))
-                    }
-                }
-            } finally {
-                reporter.cancel()
-            }
+        try {
+            runYtDlp(id, fallbackTitle, buildRequest(job, dir, resolved?.mediaUrl ?: job.url, resolved?.headers))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Plan B GENERAL: yt-dlp no reconoció la página ("Unsupported URL"). Leemos el HTML,
+            // sacamos el iframe del reproductor y reintentamos. Sirve para CUALQUIER dominio.
+            if (resolved != null || !app.settings.fallbackResolve.value) throw e
+            val fallback = runCatching { SiteResolver.tryResolve(job.url) }.getOrNull()
+            if (fallback == null || fallback.mediaUrl == job.url) throw e
+            resolved = fallback
+            dir.deleteRecursively()
+            dir.mkdirs()
+            runYtDlp(id, fallbackTitle, buildRequest(job, dir, fallback.mediaUrl, fallback.headers))
         }
 
         // Tras el merge/conversión solo queda el archivo final (+ el .info.json).
@@ -191,6 +140,83 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         )
         dao.update(done)
         Notifications.finished(applicationContext, id, done.title ?: fallbackTitle, ok = true)
+    }
+
+    /** Arma el request de yt-dlp para una URL concreta (la real, ya resuelta, o la del usuario). */
+    private fun buildRequest(
+        job: Download,
+        dir: File,
+        targetUrl: String,
+        headers: Map<String, String>?,
+    ): YoutubeDLRequest {
+        val audioOnly = job.quality == Quality.AUDIO
+        return YoutubeDLRequest(targetUrl).apply {
+            applyResolvedHeaders(headers)
+            addOption("-f", Quality.formatSelector(job.quality))
+            // `.150B` recorta el título a 150 bytes: hay sistemas de archivos con límite de nombre.
+            addOption("-o", File(dir, "%(title).150B [%(id)s].%(ext)s").absolutePath)
+            addOption("--no-playlist")
+            addOption("--write-info-json") // metadatos (título, resolución…) en un .json al lado
+            addOption("--no-mtime")
+            addOption("--retries", 5)
+            addOption("--concurrent-fragments", 4) // acelera videos en trozos (HLS/DASH)
+            if (audioOnly) {
+                addOption("-x")
+                addOption("--audio-format", "mp3")
+                addOption("--audio-quality", "192K")
+            } else {
+                addOption("--merge-output-format", "mp4") // MP4 = se reproduce en cualquier lado
+            }
+            // Sesión iniciada en "Cuentas": contenido +18, privado o de suscriptores.
+            Accounts.cookiesCopyFor(applicationContext, File(dir, "session"))
+                ?.let { addOption("--cookies", it.absolutePath) }
+            if (app.settings.sponsorBlock.value) {
+                // SponsorBlock: base de datos colaborativa que marca los segmentos de patrocinio
+                // DENTRO de los videos de YouTube. ffmpeg los recorta del archivo final.
+                addOption("--sponsorblock-remove", "sponsor,selfpromo,interaction")
+            }
+            if (app.settings.embedMetadata.value) {
+                addOption("--embed-metadata") // título, artista, fecha dentro del archivo
+                if (audioOnly) {
+                    addOption("--embed-thumbnail") // carátula en el MP3
+                    addOption("--convert-thumbnails", "jpg")
+                }
+            }
+        }
+    }
+
+    /** Ejecuta yt-dlp con seguimiento de progreso (callback → BD cada 500 ms). */
+    private suspend fun runYtDlp(id: Long, fallbackTitle: String, request: YoutubeDLRequest) {
+        // El callback llega desde el hilo que lee la salida de yt-dlp, muchas veces por segundo.
+        // Solo guardamos el último valor y otra corrutina lo escribe en la BD cada 500 ms
+        // (escribir en cada línea saturaría SQLite y la UI sin aportar nada).
+        val latest = AtomicReference<ProgressLine?>(null)
+        coroutineScope {
+            val reporter = launch {
+                var processingMarked = false
+                while (isActive) {
+                    delay(500)
+                    val p = latest.get() ?: continue
+                    if (p.processing && !processingMarked) {
+                        dao.advanceStatus(id, Status.PROCESSING)
+                        processingMarked = true
+                    }
+                    dao.setProgress(id, p.percent, p.text)
+                    runCatching { setForeground(foregroundInfo(id, fallbackTitle, p.percent, p.text)) }
+                }
+            }
+            try {
+                // runInterruptible: si cancelan la corrutina, interrumpe el hilo bloqueado
+                // y la librería mata el proceso de Python.
+                runInterruptible(Dispatchers.IO) {
+                    YoutubeDL.execute(request, id.toString(), false) { percent, eta, line ->
+                        latest.set(ProgressLine.parse(percent, eta, line, latest.get()))
+                    }
+                }
+            } finally {
+                reporter.cancel()
+            }
+        }
     }
 
     private fun workDir(id: Long) = File(applicationContext.cacheDir, "downloads/$id")

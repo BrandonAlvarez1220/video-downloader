@@ -19,7 +19,7 @@ class App : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val database by lazy { AppDatabase.build(this) }
     val settings by lazy { Settings(this) }
-    val engine by lazy { Engine(this, appScope) }
+    val engine by lazy { Engine(this, appScope, settings) }
     val downloads by lazy { DownloadController(this, database.downloads(), settings) }
 
     override fun onCreate() {

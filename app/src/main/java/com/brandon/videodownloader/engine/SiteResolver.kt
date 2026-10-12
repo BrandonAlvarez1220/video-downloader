@@ -33,51 +33,58 @@ object SiteResolver {
 
     private const val MAX_DEPTH = 3
 
-    /** ¿Este enlace es de un sitio que necesita resolución previa? */
+    /** ¿El enlace pertenece a un agregador del catálogo ([Sites])? */
     fun matches(url: String): Boolean = Sites.match(url) != null
 
+    /**
+     * Resuelve SIEMPRE. Si no logra aislar el reproductor, devuelve la propia página
+     * (para no romper el comportamiento anterior).
+     */
     suspend fun resolve(url: String): Resolved = withContext(Dispatchers.IO) {
-        val agg = Sites.match(url) ?: error("Sitio no soportado por el resolutor: $url")
+        val site = Sites.match(url)
+        val found = search(url)
+        if (found != null) {
+            Resolved(found.mediaUrl, url, found.title, site?.id ?: hostName(url), site?.name ?: hostName(url), headersFor(found.referer))
+        } else {
+            Resolved(url, url, null, site?.id ?: hostName(url), site?.name ?: hostName(url), headersFor(url))
+        }
+    }
 
+    /**
+     * Plan B GENERAL: intenta resolver CUALQUIER página, no solo las del catálogo.
+     * Devuelve null si no encontró ningún reproductor/archivo (así se propaga el error original).
+     */
+    suspend fun tryResolve(url: String): Resolved? = withContext(Dispatchers.IO) {
+        val found = search(url) ?: return@withContext null
+        val site = Sites.match(url)
+        Resolved(found.mediaUrl, url, found.title, site?.id ?: hostName(url), site?.name ?: hostName(url), headersFor(found.referer))
+    }
+
+    private data class Found(val mediaUrl: String, val referer: String, val title: String?)
+
+    /** Lee la página (y los iframes intermedios) y devuelve la mejor URL de video encontrada. */
+    private fun search(url: String): Found? {
         var current = url
         var referer: String? = null
-        var html = ""
         var depth = 0
-
         while (depth++ < MAX_DEPTH) {
             val resp = Http.get(current, referer = referer)
-            html = resp.body
             val base = resp.finalUrl
-            val best = extractCandidates(html, base).firstOrNull() ?: break
+            val best = extractCandidates(resp.body, base).firstOrNull() ?: return null
 
             // Encontramos el reproductor (o el archivo directo): se lo pasamos a yt-dlp.
             if (isDirectMedia(best) || Sites.isYtDlpHost(best)) {
-                return@withContext Resolved(
-                    mediaUrl = best,
-                    pageUrl = url,
-                    title = pageTitle(html),
-                    siteId = agg.id,
-                    siteName = agg.name,
-                    headers = headersFor(base),
-                )
+                return Found(best, base, pageTitle(resp.body))
             }
 
             // El iframe apuntaba a otra página intermedia: seguimos un salto más.
             referer = base
             current = best
         }
-
-        // No se pudo aislar el reproductor: le pasamos la página tal cual a yt-dlp
-        // (su extractor genérico a veces encuentra el video) con el Referer de la página.
-        Resolved(
-            mediaUrl = url,
-            pageUrl = url,
-            title = pageTitle(html),
-            siteId = agg.id,
-            siteName = agg.name,
-            headers = headersFor(url),
-        )
+        return null
     }
+
+    private fun hostName(url: String): String = Sites.hostOf(url) ?: "Web"
 
     // ---------------------------------------------------------------------------------------
     // Extracción de candidatos del HTML
@@ -96,9 +103,9 @@ object SiteResolver {
         """(?:file|source|src|url|code|link|video)\s*[:=]\s*["']((?:https?:)?//[^"']{6,})["']""",
         RegexOption.IGNORE_CASE,
     )
-    // URLs .m3u8/.mp4 sueltas dentro del HTML/JS.
+    // URLs .m3u8/.mp4 sueltas dentro del HTML/JS. El lookahead evita cortar en `.mp4` de "mp4upload".
     private val rawMediaRe = Regex(
-        """(?:https?:)?//[^\s"'<>\\]+?\.(?:m3u8|mpd|mp4|webm|mkv|m4v)(?:\?[^\s"'<>\\]*)?""",
+        """(?:https?:)?//[^\s"'<>\\]*?\.(?:m3u8|mpd|mp4|webm|mkv|m4v)(?:\?[^\s"'<>\\]*)?(?=["'\s<>\\]|$)""",
         RegexOption.IGNORE_CASE,
     )
     // Atributos "data-" que algunos reproductores usan en vez de src.
@@ -115,6 +122,12 @@ object SiteResolver {
         """<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:video(?::(?:url|secure_url))?|twitter:player:stream)["']""",
         RegexOption.IGNORE_CASE,
     )
+    // Algunos temas (WordPress) guardan la URL del reproductor en BASE64 dentro de un data-*:
+    //   data-src="aHR0cHM6Ly9wbGF5ZXIu…"  →  https://player.…
+    private val base64AttrRe = Regex(
+        """data-(?:default-)?(?:src|url|video|player|file|embed|iframe)\s*=\s*["']([A-Za-z0-9+/_=-]{16,})["']""",
+        RegexOption.IGNORE_CASE,
+    )
 
     private val imageRe = Regex(
         """\.(?:jpg|jpeg|png|webp|gif|svg|ico|bmp|avif)(?:\?|#|$)""",
@@ -126,6 +139,11 @@ object SiteResolver {
     )
     private val embedPathRe = Regex(
         """/(?:embed|e|v|d|player|iframe|watch|video)/""",
+        RegexOption.IGNORE_CASE,
+    )
+    // Endpoints HLS/DASH sin extensión, p. ej. `https://player.zilla-networks.com/m3u8/<hash>`.
+    private val mediaPathRe = Regex(
+        """/(?:m3u8|hls|dash|manifest)(?:/|\.|$)""",
         RegexOption.IGNORE_CASE,
     )
 
@@ -141,6 +159,10 @@ object SiteResolver {
         metaVideoA.findAll(text).forEach { raw += it.groupValues[1] }
         metaVideoB.findAll(text).forEach { raw += it.groupValues[1] }
         rawMediaRe.findAll(text).forEach { raw += it.value }
+        // Atributos con la URL en base64 (temas WordPress tipo animeflv.or.at).
+        base64AttrRe.findAll(text).forEach { m ->
+            decodeBase64(m.groupValues[1])?.let { raw += it }
+        }
 
         return raw.asSequence()
             .mapNotNull { absolute(it, baseUrl) }
@@ -153,16 +175,17 @@ object SiteResolver {
     private fun looksLikeMedia(url: String): Boolean {
         if (Sites.isBlocked(url)) return false
         if (imageRe.containsMatchIn(url)) return false
-        if (mediaRe.containsMatchIn(url)) return true
+        if (isDirectMedia(url)) return true
         if (Sites.isYtDlpHost(url)) return true
         return embedPathRe.containsMatchIn(url)
     }
 
-    private fun isDirectMedia(url: String): Boolean = mediaRe.containsMatchIn(url)
+    private fun isDirectMedia(url: String): Boolean =
+        mediaRe.containsMatchIn(url) || mediaPathRe.containsMatchIn(url)
 
     /** Menor = mejor: 0 archivo directo, 1 reproductor conocido por yt-dlp, 2 otro. */
     private fun rank(url: String): Int = when {
-        mediaRe.containsMatchIn(url) -> 0
+        isDirectMedia(url) -> 0
         Sites.isYtDlpHost(url) -> 1
         else -> 2
     }
@@ -190,6 +213,28 @@ object SiteResolver {
         .replace("\\u002F", "/", ignoreCase = true)
         .replace("&#47;", "/")
         .replace("&amp;", "&")
+
+    /**
+     * Decodifica el base64 de un atributo `data-*`. Prueba varios "sabores" (estándar, sin relleno,
+     * URL-safe) porque cada tema usa el que quiere. Devuelve null si no es base64 de una URL.
+     */
+    private fun decodeBase64(raw: String): String? {
+        val s = raw.trim()
+        if (s.length < 12 || !s.matches(Regex("""[A-Za-z0-9+/_=-]+"""))) return null
+        val attempts = intArrayOf(
+            android.util.Base64.DEFAULT,
+            android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP,
+            android.util.Base64.URL_SAFE,
+            android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING,
+        )
+        for (flags in attempts) {
+            val out = runCatching {
+                String(android.util.Base64.decode(s, flags), Charsets.UTF_8).trim()
+            }.getOrNull() ?: continue
+            if (out.startsWith("http://") || out.startsWith("https://") || out.startsWith("//")) return out
+        }
+        return null
+    }
 
     private fun headersFor(referer: String): Map<String, String> = mapOf(
         "Referer" to referer,
