@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
@@ -125,6 +126,7 @@ fun LibraryScreen(vm: MainViewModel, vault: Boolean = false) {
         share = { share(context, it) },
         openSource = { openUrl(context, it.url) },
         delete = { toDelete = it },
+        toggleVault = { if (it.vault) vm.moveOutOfVault(it) else vm.moveToVault(it) },
     )
 
     LazyVerticalGrid(
@@ -172,6 +174,7 @@ private class ItemActions(
     val share: (Download) -> Unit,
     val openSource: (Download) -> Unit,
     val delete: (Download) -> Unit,
+    val toggleVault: (Download) -> Unit,
 )
 
 @Composable
@@ -350,6 +353,11 @@ private fun ItemMenu(d: Download, actions: ItemActions) {
             MenuItem("Abrir con…", Icons.AutoMirrored.Filled.OpenInNew) { open = false; actions.openWith(d) }
             MenuItem("Compartir", Icons.Filled.Share) { open = false; actions.share(d) }
             MenuItem("Ver publicación original", Icons.Filled.Language) { open = false; actions.openSource(d) }
+            if (d.vault) {
+                MenuItem("Sacar de la Bóveda", Icons.Filled.LockOpen) { open = false; actions.toggleVault(d) }
+            } else {
+                MenuItem("Mover a la Bóveda", Icons.Filled.Lock) { open = false; actions.toggleVault(d) }
+            }
             MenuItem("Eliminar", Icons.Filled.Delete, danger = true) { open = false; actions.delete(d) }
         }
     }

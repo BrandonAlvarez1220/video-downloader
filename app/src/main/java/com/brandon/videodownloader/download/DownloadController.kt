@@ -14,6 +14,8 @@ import com.brandon.videodownloader.data.Settings
 import com.brandon.videodownloader.data.Status
 import com.brandon.videodownloader.engine.ProbeResult
 import com.yausername.youtubedl_android.YoutubeDL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /** Punto único para agregar/cancelar/reintentar/borrar descargas (lo usa la UI). */
@@ -70,6 +72,34 @@ class DownloadController(
     }
 
     suspend fun clearFailures() = dao.clearFinishedFailures()
+
+    /**
+     * Pasa un video de la biblioteca a la Bóveda: lo copia al almacenamiento interno y borra la
+     * copia pública. Devuelve false si la copia de la galería no se pudo borrar (pasa si la app se
+     * reinstaló: Android ya no la reconoce como dueña de ese archivo).
+     */
+    suspend fun moveToVault(d: Download): Boolean = withContext(Dispatchers.IO) {
+        val uri = Uri.parse(d.fileUri ?: error("El video no tiene archivo"))
+        if (uri.scheme == "file") {
+            dao.update(d.copy(vault = true))
+            return@withContext true
+        }
+        val saved = MediaStoreSaver.copyIntoVault(
+            context, uri, d.fileName ?: "video.mp4", d.mimeType ?: "video/mp4",
+        )
+        dao.update(d.copy(vault = true, fileUri = saved.uri.toString(), fileName = saved.name, fileSize = saved.size))
+        runCatching { context.contentResolver.delete(uri, null, null) > 0 }.getOrDefault(false)
+    }
+
+    /** Saca un video de la Bóveda: vuelve a la galería y a la biblioteca normal. */
+    suspend fun moveOutOfVault(d: Download) = withContext(Dispatchers.IO) {
+        val file = File(Uri.parse(d.fileUri ?: error("El video no tiene archivo")).path!!)
+        val saved = MediaStoreSaver.save(context, file)
+        dao.update(
+            d.copy(vault = false, fileUri = saved.uri.toString(), fileName = saved.name, fileSize = saved.size, mimeType = saved.mime)
+        )
+        file.delete()
+    }
 
     /** Borra el archivo de la galería y el registro. */
     suspend fun deleteFromLibrary(d: Download) {

@@ -52,7 +52,7 @@
 
 **Privacidad**
 - **Cuentas y sesiones**: inicias sesión en un navegador dentro de la app (YouTube, Instagram,
-  Facebook, X, TikTok, Reddit o cualquier otro sitio) para descargar contenido privado o protegido (incluido el de
+  Facebook, X, TikTok, Reddit o cualquier otro sitio) para descargar contenido protegido (incluido el de
   suscriptores). La sesión se guarda solo en el teléfono; la app nunca ve tu contraseña.
 - **Bóveda 🔒**: una biblioteca aparte, protegida con huella, rostro o PIN. Al descargar eliges
   "Guardar en la Bóveda" y ese video se guarda en el almacenamiento interno de la app: no aparece en la

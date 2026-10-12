@@ -74,5 +74,24 @@ object MediaStoreSaver {
         return Saved(Uri.fromFile(dest), dest.name, dest.length(), mime)
     }
 
+    /** Copia un video que ya está en la galería (content://) hacia la Bóveda. */
+    fun copyIntoVault(context: Context, source: Uri, name: String, mime: String): Saved {
+        val dir = privateDir(context).apply { mkdirs() }
+        val base = name.substringBeforeLast('.')
+        val ext = name.substringAfterLast('.', "mp4")
+        var dest = File(dir, "$base.$ext")
+        var n = 1
+        while (dest.exists()) dest = File(dir, "$base (${n++}).$ext")
+        try {
+            context.contentResolver.openInputStream(source)?.use { input ->
+                dest.outputStream().use { input.copyTo(it, bufferSize = 1 shl 20) }
+            } ?: throw IOException("No se pudo leer el archivo (¿se borró desde la galería?)")
+        } catch (e: Exception) {
+            dest.delete()
+            throw e
+        }
+        return Saved(Uri.fromFile(dest), dest.name, dest.length(), mime)
+    }
+
     fun privateDir(context: Context) = File(context.filesDir, "private")
 }

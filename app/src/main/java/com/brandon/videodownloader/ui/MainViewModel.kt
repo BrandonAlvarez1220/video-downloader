@@ -198,6 +198,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _messages.send("Eliminado")
     }
 
+    fun moveToVault(d: Download) = viewModelScope.launch {
+        val msg = runCatching {
+            if (controller.moveToVault(d)) "Movido a la Bóveda"
+            else "Movido a la Bóveda. La copia de la galería no se pudo borrar; bórrala desde la galería"
+        }.getOrElse { "No se pudo mover: ${shortError(it)}" }
+        _messages.send(msg)
+    }
+
+    fun moveOutOfVault(d: Download) = viewModelScope.launch {
+        val msg = runCatching { controller.moveOutOfVault(d); "Movido a la biblioteca y la galería" }
+            .getOrElse { "No se pudo mover: ${shortError(it)}" }
+        _messages.send(msg)
+    }
+
     fun updateEngine() {
         if (updatingEngine) return
         updatingEngine = true
