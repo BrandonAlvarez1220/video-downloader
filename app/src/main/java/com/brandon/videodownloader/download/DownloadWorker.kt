@@ -186,7 +186,7 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
             } else {
                 addOption("--merge-output-format", "mp4") // MP4 = se reproduce en cualquier lado
             }
-            // Sesión iniciada en "Cuentas": contenido con restricción de edad, privado o de suscriptores.
+            // Sesión iniciada en "Cuentas": contenido privado o protegido.
             Accounts.cookiesCopyFor(applicationContext, File(dir, "session"))
                 ?.let { addOption("--cookies", it.absolutePath) }
             if (app.settings.sponsorBlock.value) {

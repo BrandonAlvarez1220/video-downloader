@@ -52,8 +52,8 @@
 
 **Privacidad**
 - **Cuentas y sesiones**: inicias sesión en un navegador dentro de la app (YouTube, Instagram,
-  Facebook, X, TikTok, Reddit o cualquier otro sitio) para descargar contenido con restricción de edad, privado o de
-  suscriptores. La sesión se guarda solo en el teléfono; la app nunca ve tu contraseña.
+  Facebook, X, TikTok, Reddit o cualquier otro sitio) para descargar contenido privado o protegido (incluido el de
+  suscriptores). La sesión se guarda solo en el teléfono; la app nunca ve tu contraseña.
 - **Bóveda 🔒**: una biblioteca aparte, protegida con huella, rostro o PIN. Al descargar eliges
   "Guardar en la Bóveda" y ese video se guarda en el almacenamiento interno de la app: no aparece en la
   galería, ni en la biblioteca normal, ni con su título en la cola o las notificaciones. Pide huella cada
@@ -76,7 +76,7 @@
 | Streams "en trozos" | `.m3u8` (HLS) y `.mpd` (DASH): noticias, cursos, TV en línea | ✅ |
 | Páginas con un reproductor incrustado | Blogs y sitios con `<video>`, JW Player, etc. | ✅ casi siempre |
 | Sitios para adultos | La mayoría de los populares, sin cuenta | ✅ |
-| Contenido con login | Videos de YouTube con restricción de edad, videos privados, Instagram/Facebook privados, Vimeo, sitios premium | ✅ inicia sesión en Ajustes → *Cuentas y sesiones* |
+| Contenido con login | Videos protegidos o privados de YouTube, Instagram/Facebook privados, Vimeo, sitios premium | ✅ inicia sesión en Ajustes → *Cuentas y sesiones* |
 | Plataformas con DRM | Netflix, Prime Video, Disney+, HBO Max, Spotify, Apple Music | ❌ cifrado; ninguna herramienta legal lo descarga |
 
 Si un sitio que antes funcionaba empieza a fallar, casi siempre se arregla con

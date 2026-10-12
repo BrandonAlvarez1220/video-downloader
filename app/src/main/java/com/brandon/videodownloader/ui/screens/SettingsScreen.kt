@@ -121,7 +121,7 @@ fun SettingsScreen(vm: MainViewModel, engine: Engine.State, onClose: () -> Unit)
             Group {
                 SettingRow(
                     Icons.Filled.AccountCircle, "Cuentas y sesiones",
-                    "Para videos con restricción de edad, privados o exclusivos de suscriptores",
+                    "Para descargar contenido privado o protegido",
                     onClick = { vm.overlay = MainViewModel.Overlay.Accounts },
                 ) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null) }
                 SettingRow(

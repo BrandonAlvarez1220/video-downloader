@@ -7,7 +7,7 @@ import androidx.compose.ui.graphics.Color
 import java.io.File
 
 /**
- * Sesiones de usuario para contenido que exige login: videos con restricción de edad,
+ * Sesiones de usuario para contenido que exige login: videos protegidos,
  * privados, de cuentas que sigues, o sitios premium.
  *
  * Cómo funciona: inicias sesión en un WebView (un navegador dentro de la app). El WebView guarda

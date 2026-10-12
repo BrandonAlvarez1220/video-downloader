@@ -113,8 +113,8 @@ fun AccountsScreen(vm: MainViewModel, onClose: () -> Unit) {
                     GradientIcon(Icons.Filled.Shield)
                     Spacer(Modifier.width(14.dp))
                     Text(
-                        "Inicia sesión para descargar videos con restricción de edad, privados o exclusivos " +
-                            "de suscriptores. Tu sesión se guarda solo en este teléfono; la app nunca ve tu contraseña.",
+                        "Inicia sesión para descargar contenido privado o protegido. " +
+                            "Tu sesión se guarda solo en este teléfono; la app nunca ve tu contraseña.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
