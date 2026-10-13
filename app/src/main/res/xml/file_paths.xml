@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Carpetas que el FileProvider puede compartir temporalmente con otras apps (abrir con / compartir). -->
+<paths>
+    <files-path name="private" path="private/" />
+</paths>

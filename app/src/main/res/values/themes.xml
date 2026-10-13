@@ -1,0 +1,8 @@
+<resources>
+    <!-- Tema base del sistema; los colores reales los define Compose (ui/theme). -->
+    <style name="Theme.VideoDownloader" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF101014</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
