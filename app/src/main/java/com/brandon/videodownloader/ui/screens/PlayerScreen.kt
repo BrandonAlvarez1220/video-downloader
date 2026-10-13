@@ -2,8 +2,13 @@ package com.brandon.videodownloader.ui.screens
 
 import android.app.Activity
 import android.net.Uri
+import android.view.View
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +23,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -71,21 +79,32 @@ fun PlayerScreen(download: Download, onClose: () -> Unit) {
         }
     }
 
+    // La barra del título sigue a los controles de ExoPlayer: aparece al tocar la pantalla
+    // y se oculta junto con ellos mientras el video se reproduce.
+    var controlsVisible by remember { mutableStateOf(true) }
+
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     this.player = player
                     keepScreenOn = true
+                    setControllerVisibilityListener(
+                        PlayerView.ControllerVisibilityListener { visibility ->
+                            controlsVisible = visibility == View.VISIBLE
+                        }
+                    )
                 }
             },
             modifier = Modifier.fillMaxSize(),
         )
+        AnimatedVisibility(visible = controlsVisible, enter = fadeIn(), exit = fadeOut()) {
         Row(
             Modifier
                 .fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)))
                 .statusBarsPadding()
+                .displayCutoutPadding() // en horizontal, no quedar debajo del notch/cámara
                 .padding(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -98,6 +117,7 @@ fun PlayerScreen(download: Download, onClose: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(end = 16.dp),
             )
+        }
         }
     }
 }
