@@ -1,7 +1,9 @@
 package com.brandon.videodownloader.download
 
+import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
+import android.provider.MediaStore
 import androidx.work.Constraints
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
@@ -15,6 +17,7 @@ import com.brandon.videodownloader.data.Status
 import com.brandon.videodownloader.engine.ProbeResult
 import com.yausername.youtubedl_android.YoutubeDL
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -101,8 +104,68 @@ class DownloadController(
         file.delete()
     }
 
+    /**
+     * Revisa que cada archivo siga existiendo y quita de la app lo que borraste por fuera
+     * (por ejemplo, desde la galería). Aprovecha para generar miniaturas que falten.
+     * Devuelve cuántos registros se quitaron.
+     *
+     * Por qué hace falta: la app guarda su propia lista (Room) y la galería tiene la suya
+     * (MediaStore). Son dos "bases de datos" distintas; si borras en una, la otra no se entera sola.
+     */
+    suspend fun syncLibrary(): Int = withContext(Dispatchers.IO) {
+        // Si ya hay una revisión en curso (p. ej. entraste y saliste rápido), no duplicamos trabajo.
+        if (!syncLock.tryLock()) return@withContext 0
+        try {
+        var removed = 0
+        for (d in dao.completed()) {
+            val uri = d.fileUri?.let(Uri::parse)
+            val exists = when {
+                uri == null -> false
+                uri.scheme == "file" -> File(uri.path ?: "").exists()
+                // Si no podemos consultar (permiso, etc.) asumimos que existe: nunca borrar por duda.
+                else -> runCatching {
+                    context.contentResolver.query(uri, arrayOf(MediaStore.MediaColumns._ID), null, null, null)
+                        ?.use { it.moveToFirst() } ?: true
+                }.getOrDefault(true)
+            }
+            if (!exists) {
+                dao.delete(d.id)
+                Thumbnails.delete(context, d.id)
+                removed++
+            } else if (!Thumbnails.isLocalAndPresent(d.thumbnail)) {
+                // Videos viejos o sin imagen: miniatura propia sacada del archivo.
+                Thumbnails.fromUri(context, d.id, uri!!)?.let { dao.setThumbnail(d.id, it) }
+            }
+        }
+        removed
+        } finally {
+            syncLock.unlock()
+        }
+    }
+
+    private val syncLock = Mutex()
+
+    /** Cambia el título en la app y, si está en la galería, también el nombre del archivo allá. */
+    suspend fun rename(d: Download, newTitle: String) = withContext(Dispatchers.IO) {
+        val title = newTitle.trim()
+        if (title.isEmpty()) return@withContext
+        dao.setTitle(d.id, title)
+        val uri = d.fileUri?.let(Uri::parse) ?: return@withContext
+        if (uri.scheme != "file") {
+            val ext = d.fileName?.substringAfterLast('.', "")?.takeIf { it.isNotEmpty() }
+            val safe = title.replace(Regex("""[\\/:*?"<>|]+"""), " ").trim().take(120)
+            runCatching {
+                context.contentResolver.update(uri, ContentValues().apply {
+                    put(MediaStore.MediaColumns.TITLE, title)
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, if (ext != null) "$safe.$ext" else safe)
+                }, null, null)
+            } // si Android no lo permite (app reinstalada), el título igual cambia dentro de la app
+        }
+    }
+
     /** Borra el archivo de la galería y el registro. */
     suspend fun deleteFromLibrary(d: Download) {
+        Thumbnails.delete(context, d.id)
         d.fileUri?.let { raw ->
             val uri = Uri.parse(raw)
             runCatching {

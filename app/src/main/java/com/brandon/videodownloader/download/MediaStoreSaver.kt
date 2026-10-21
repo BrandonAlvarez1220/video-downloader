@@ -34,6 +34,7 @@ object MediaStoreSaver {
 
         val values = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, file.name)
+            put(MediaStore.MediaColumns.TITLE, file.nameWithoutExtension) // título que muestran galería y reproductores
             put(MediaStore.MediaColumns.MIME_TYPE, mime)
             put(MediaStore.MediaColumns.RELATIVE_PATH, "$folder/VideoDownloader")
             // IS_PENDING = "aún lo estoy escribiendo": la galería no lo muestra a medias.

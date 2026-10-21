@@ -129,6 +129,11 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         resolved?.title?.let { t -> media = media.renamedTo(t) }
         val info = dir.listFiles()?.firstOrNull { it.name.endsWith(".info.json") }
             ?.let { runCatching { JSONObject(it.readText()) }.getOrNull() }
+        // Título legible: el primero que no parezca un hash o nombre técnico (ver Titles).
+        val bestTitle = Titles.best(resolved?.title, info?.str("title"), job.title)
+        if (resolved == null) bestTitle?.let { media = media.renamedTo(it) }
+        // Miniatura propia (un cuadro del video): sirve aunque el sitio no dé imagen y sin internet.
+        val localThumb = Thumbnails.fromFile(applicationContext, id, media)
 
         dao.advanceStatus(id, Status.PROCESSING)
         val private = job.vault
@@ -141,10 +146,10 @@ class DownloadWorker(context: Context, params: WorkerParameters) : CoroutineWork
         if (current.status == Status.CANCELLED) return
         val done = current.copy(
             status = Status.COMPLETED,
-            title = resolved?.title ?: info?.str("title") ?: current.title ?: media.nameWithoutExtension,
+            title = bestTitle ?: media.nameWithoutExtension,
             uploader = info?.str("uploader") ?: info?.str("channel") ?: current.uploader,
             site = info?.str("extractor_key") ?: current.site,
-            thumbnail = info?.str("thumbnail") ?: current.thumbnail,
+            thumbnail = localThumb ?: info?.str("thumbnail") ?: current.thumbnail,
             durationSec = info?.optDouble("duration")?.takeIf { !it.isNaN() }?.toLong() ?: current.durationSec,
             width = info?.optInt("width")?.takeIf { it > 0 },
             height = info?.optInt("height")?.takeIf { it > 0 },

@@ -198,6 +198,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _messages.send("Eliminado")
     }
 
+    /** Quita de la app lo que se borró por fuera (galería) y completa miniaturas. */
+    fun syncLibrary() = viewModelScope.launch {
+        val removed = runCatching { controller.syncLibrary() }.getOrDefault(0)
+        if (removed > 0) {
+            _messages.send(if (removed == 1) "Se quitó 1 video que ya no estaba en el teléfono" else "Se quitaron $removed videos que ya no estaban en el teléfono")
+        }
+    }
+
+    fun rename(d: Download, title: String) = viewModelScope.launch {
+        controller.rename(d, title)
+        _messages.send("Título actualizado")
+    }
+
     fun moveToVault(d: Download) = viewModelScope.launch {
         val msg = runCatching {
             if (controller.moveToVault(d)) "Movido a la Bóveda"

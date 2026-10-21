@@ -46,6 +46,16 @@ interface DownloadDao {
     @Query("UPDATE downloads SET progress = :progress, progressText = :text WHERE id = :id")
     suspend fun setProgress(id: Long, progress: Float, text: String?)
 
+    /** Todo lo ya descargado (biblioteca + Bóveda), para revisar que los archivos sigan existiendo. */
+    @Query("SELECT * FROM downloads WHERE status = 'COMPLETED'")
+    suspend fun completed(): List<Download>
+
+    @Query("UPDATE downloads SET title = :title WHERE id = :id")
+    suspend fun setTitle(id: Long, title: String)
+
+    @Query("UPDATE downloads SET thumbnail = :thumbnail WHERE id = :id")
+    suspend fun setThumbnail(id: Long, thumbnail: String)
+
     @Query("DELETE FROM downloads WHERE id = :id")
     suspend fun delete(id: Long)
 
