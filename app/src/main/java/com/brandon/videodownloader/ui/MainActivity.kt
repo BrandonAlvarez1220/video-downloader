@@ -100,6 +100,8 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         AppLock.onForeground(this, vm.settings.appLock.value)
+        // Al volver (p. ej. después de borrar algo en la galería) la biblioteca se pone al día.
+        vm.syncLibrary()
     }
 
     override fun onStop() {

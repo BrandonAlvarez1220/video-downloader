@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Lock
@@ -48,6 +49,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -91,6 +93,7 @@ fun LibraryScreen(vm: MainViewModel, vault: Boolean = false) {
     val all by (if (vault) vm.vault else vm.library).collectAsStateWithLifecycle()
     val context = LocalContext.current
     var toDelete by remember { mutableStateOf<Download?>(null) }
+    var toRename by remember { mutableStateOf<Download?>(null) }
 
     if (all.isEmpty()) {
         if (vault) {
@@ -126,6 +129,7 @@ fun LibraryScreen(vm: MainViewModel, vault: Boolean = false) {
         share = { share(context, it) },
         openSource = { openUrl(context, it.url) },
         delete = { toDelete = it },
+        rename = { toRename = it },
         toggleVault = { if (it.vault) vm.moveOutOfVault(it) else vm.moveToVault(it) },
     )
 
@@ -152,6 +156,30 @@ fun LibraryScreen(vm: MainViewModel, vault: Boolean = false) {
         }
     }
 
+    toRename?.let { d ->
+        var text by remember(d.id) { mutableStateOf(d.title ?: d.fileName.orEmpty()) }
+        AlertDialog(
+            onDismissRequest = { toRename = null },
+            icon = { Icon(Icons.Filled.Edit, null) },
+            title = { Text("Cambiar título") },
+            text = {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { vm.rename(d, text); toRename = null },
+                    enabled = text.isNotBlank(),
+                ) { Text("Guardar") }
+            },
+            dismissButton = { TextButton(onClick = { toRename = null }) { Text("Cancelar") } },
+        )
+    }
+
     toDelete?.let { d ->
         AlertDialog(
             onDismissRequest = { toDelete = null },
@@ -174,6 +202,7 @@ private class ItemActions(
     val share: (Download) -> Unit,
     val openSource: (Download) -> Unit,
     val delete: (Download) -> Unit,
+    val rename: (Download) -> Unit,
     val toggleVault: (Download) -> Unit,
 )
 
@@ -285,13 +314,10 @@ private fun GridItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             }
         }
         Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f).padding(start = 2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                TitleLabel(d, onEdit = { actions.rename(d) })
                 Text(
-                    d.title ?: d.fileName ?: d.url, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    meta(d, isAudio), style = MaterialTheme.typography.labelSmall,
+                    meta(d, isAudio), modifier = Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                 )
             }
@@ -317,10 +343,7 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    d.title ?: d.fileName ?: d.url, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                )
+                TitleLabel(d, onEdit = { actions.rename(d) })
                 Text(
                     listOfNotNull(d.uploader, Platform.fromSite(d.site, d.url).name).joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall, maxLines = 1,
@@ -330,6 +353,36 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             }
             ItemMenu(d, actions)
         }
+    }
+}
+
+/**
+ * Etiqueta con el título del video. Tocarla abre el editor de título directamente
+ * (tocar la miniatura sigue reproduciendo el video).
+ */
+@Composable
+private fun TitleLabel(d: Download, onEdit: () -> Unit) {
+    Row(
+        Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onEdit)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            d.title ?: d.fileName ?: d.url,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            Icons.Filled.Edit, "Cambiar título",
+            Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -352,6 +405,7 @@ private fun ItemMenu(d: Download, actions: ItemActions) {
             MenuItem("Reproducir", Icons.Filled.PlayArrow) { open = false; actions.play(d) }
             MenuItem("Abrir con…", Icons.AutoMirrored.Filled.OpenInNew) { open = false; actions.openWith(d) }
             MenuItem("Compartir", Icons.Filled.Share) { open = false; actions.share(d) }
+            MenuItem("Cambiar título", Icons.Filled.Edit) { open = false; actions.rename(d) }
             MenuItem("Ver publicación original", Icons.Filled.Language) { open = false; actions.openSource(d) }
             if (d.vault) {
                 MenuItem("Sacar de la Bóveda", Icons.Filled.LockOpen) { open = false; actions.toggleVault(d) }
