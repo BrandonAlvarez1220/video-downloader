@@ -314,13 +314,10 @@ private fun GridItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             }
         }
         Row(verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f).padding(start = 2.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                TitleLabel(d, onEdit = { actions.rename(d) })
                 Text(
-                    d.title ?: d.fileName ?: d.url, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                )
-                Text(
-                    meta(d, isAudio), style = MaterialTheme.typography.labelSmall,
+                    meta(d, isAudio), modifier = Modifier.padding(start = 6.dp), style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1,
                 )
             }
@@ -346,10 +343,7 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    d.title ?: d.fileName ?: d.url, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.titleSmall,
-                )
+                TitleLabel(d, onEdit = { actions.rename(d) })
                 Text(
                     listOfNotNull(d.uploader, Platform.fromSite(d.site, d.url).name).joinToString(" · "),
                     style = MaterialTheme.typography.labelSmall, maxLines = 1,
@@ -359,6 +353,36 @@ private fun ListItem(d: Download, actions: ItemActions, modifier: Modifier = Mod
             }
             ItemMenu(d, actions)
         }
+    }
+}
+
+/**
+ * Etiqueta con el título del video. Tocarla abre el editor de título directamente
+ * (tocar la miniatura sigue reproduciendo el video).
+ */
+@Composable
+private fun TitleLabel(d: Download, onEdit: () -> Unit) {
+    Row(
+        Modifier
+            .clip(MaterialTheme.shapes.small)
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .clickable(onClick = onEdit)
+            .padding(horizontal = 8.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            d.title ?: d.fileName ?: d.url,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        Spacer(Modifier.width(6.dp))
+        Icon(
+            Icons.Filled.Edit, "Cambiar título",
+            Modifier.size(14.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
